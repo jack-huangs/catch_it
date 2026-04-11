@@ -21,11 +21,11 @@ import xml.etree.ElementTree as ET
 # Function to convert XML file to string
 def xml_to_string(file_path):
     try:
-        # Parse the XML file
+        # 读取 MuJoCo XML，并转成字符串；后面会用这个字符串重新构建模型
         tree = ET.parse(file_path)
         root = tree.getroot()
 
-        # Convert the XML element tree to a string
+        # 把 XML 树重新序列化成字符串
         xml_str = ET.tostring(root, encoding='unicode')
         
         return xml_str
@@ -60,7 +60,9 @@ class MJ_DCMM(object):
                  timestep=0.002):
         self.viewer = None
         self.open_viewer = viewer
-        # Load the MuJoCo model
+        # 这里同时维护两套模型：
+        # 1. self.model：完整机器人 + 物体，用于真正仿真
+        # 2. self.model_arm：只包含机械臂，用于单独做 IK 求解
         if model is None:
             if not object_eval: model_path = os.path.join(DcmmCfg.ASSET_PATH, DcmmCfg.XML_DCMM_LEAP_OBJECT_PATH)
             else: model_path = os.path.join(DcmmCfg.ASSET_PATH, DcmmCfg.XML_DCMM_LEAP_UNSEEN_OBJECT_PATH)
@@ -77,6 +79,7 @@ class MJ_DCMM(object):
         self.model_arm.opt.timestep = timestep
         self.data = mujoco.MjData(self.model)
         self.data_arm = mujoco.MjData(self.model_arm)
+        # 先把机械臂和手部放到默认初始关节角
         self.data.qpos[15:21] = DcmmCfg.arm_joints[:]
         self.data.qpos[21:37] = DcmmCfg.hand_joints[:]
         self.data_arm.qpos[0:6] = DcmmCfg.arm_joints[:]
@@ -87,8 +90,7 @@ class MJ_DCMM(object):
         self.current_ee_pos = copy.deepcopy(self.data_arm.body("link6").xpos)
         self.current_ee_quat = copy.deepcopy(self.data_arm.body("link6").xquat)
 
-        ## Get the joint ID for the body, base, arm, hand and object
-        # Note: The joint id of the mm body is 0 by default
+        # 检查 XML 里是否真的有目标物体；后面接触检测、抛掷都依赖它
         try:
             _ = self.data.body(object_name)
         except:
@@ -101,7 +103,11 @@ class MJ_DCMM(object):
         self.floor_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_GEOM, 'floor')
         self.object_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_GEOM, self.object_name)
 
-        # Mobile Base Control
+        # ------------------------------
+        # 底盘 / 机械臂 / 手部的低层控制器
+        # PPO 不直接输出电机力矩，而是先给“目标”
+        # 再由 PID 控制器把目标转成可执行的控制量
+        # ------------------------------
         self.rp_base = np.zeros(3)
         self.rp_ref_base = np.zeros(3)
         self.drive_pid = PID("drive", DcmmCfg.Kp_drive, DcmmCfg.Ki_drive, DcmmCfg.Kd_drive, dim=4, llim=DcmmCfg.llim_drive, ulim=DcmmCfg.ulim_drive, debug=False)
@@ -114,22 +120,22 @@ class MJ_DCMM(object):
         self.steer_ang = np.array([0.0, 0.0, 0.0, 0.0])
         self.drive_vel = np.array([0.0, 0.0, 0.0, 0.0])
 
-        ## Define Inverse Kinematics Solver for the Arm
+        # 机械臂 IK 求解器：
+        # 输入“末端想去的位置/姿态”，输出“6 个关节应该到哪里”
         self.ik_arm = IKArm(solver_type=DcmmCfg.ik_config["solver_type"], ilimit=DcmmCfg.ik_config["ilimit"], 
                             ps=DcmmCfg.ik_config["ps"], λΣ=DcmmCfg.ik_config["λΣ"], tol=DcmmCfg.ik_config["ee_tol"])
 
-        ## Initialize the camera parameters
+        # 离屏渲染相机参数，后面环境会拿这个相机做 RGB / depth 观测
         self.model.vis.global_.offwidth = DcmmCfg.cam_config["width"]
         self.model.vis.global_.offheight = DcmmCfg.cam_config["height"]
         self.create_camera_data(DcmmCfg.cam_config["width"], DcmmCfg.cam_config["height"], DcmmCfg.cam_config["name"])
 
-        ## Initialize the target velocity of the mobile base
+        # 目标量：每一步控制前，环境会先更新这些 target，
+        # 再由 PID 去追踪这些 target
         self.target_base_vel = np.zeros(3)
         self.target_arm_qpos = np.zeros(6)
         self.target_hand_qpos = np.zeros(16)
-        ## Initialize the target joint positions of the arm
         self.target_arm_qpos[:] = DcmmCfg.arm_joints[:]
-        ## Initialize the target joint positions of the hand
         self.target_hand_qpos[:] = DcmmCfg.hand_joints[:]
 
         self.ik_solution = np.zeros(6)
@@ -219,11 +225,11 @@ class MJ_DCMM(object):
         print("\nSimulation Timestep: ", self.model.opt.timestep)
     
     def move_base_vel(self, target_base_vel):
+        # 先把“底盘目标速度”通过 IKBase 转成：
+        # 1. 四个转向轮应该转到的角度
+        # 2. 四个驱动轮应该达到的速度
         self.steer_ang, self.drive_vel = IKBase(target_base_vel[0], target_base_vel[1], target_base_vel[2])
-        ####################
-        ## No bugs so far ##
-        ####################
-        # Mobile base steering and driving control 
+        # 读取当前底盘状态，后面交给 PID 做闭环控制
         # TODO: angular velocity is not correct when the robot is self-rotating.
         current_steer_pos = np.array([self.data.joint("steer_fl").qpos[0],
                                       self.data.joint("steer_fr").qpos[0], 
@@ -233,13 +239,16 @@ class MJ_DCMM(object):
                                       self.data.joint("drive_fr").qvel[0], 
                                       self.data.joint("drive_rl").qvel[0],
                                       self.data.joint("drive_rr").qvel[0]])
+        # PID 根据“目标 - 当前”的误差输出控制量
         mv_steer = self.steer_pid.update(self.steer_ang, current_steer_pos, self.data.time)
         mv_drive = self.drive_pid.update(self.drive_vel, current_drive_vel, self.data.time)
+        # 如果车轮正在向目标方向加速，这里人为限制一下 drive 控制量，避免加速太猛
         if np.all(current_drive_vel > 0.0) and np.all(current_drive_vel < self.drive_vel):
             mv_drive = np.clip(mv_drive, 0, self.drive_ctrlrange[1] / 10.0)
         if np.all(current_drive_vel < 0.0) and np.all(current_drive_vel > self.drive_vel):
             mv_drive = np.clip(mv_drive, self.drive_ctrlrange[0] / 10.0, 0)
         
+        # 转向控制量必须落在 MuJoCo actuator 的允许范围内
         mv_steer = np.clip(mv_steer, self.steer_ctrlrange[0], self.steer_ctrlrange[1])
         
         return mv_steer, mv_drive
@@ -253,19 +262,22 @@ class MJ_DCMM(object):
         Return:
         - The target joint positions of the arm
         """
+        # 先读取当前末端位姿
         self.current_ee_pos[:] = self.data_arm.body("link6").xpos[:]
         self.current_ee_quat[:] = self.data_arm.body("link6").xquat[:]
+        # PPO 给的是末端位姿增量，这里把增量叠加到当前末端上
         target_pos = self.current_ee_pos + delta_pose[0:3]
         r_delta = R.from_euler('zxy', delta_pose[3:6])
         r_current = R.from_quat(self.current_ee_quat)
         target_quat = (r_delta * r_current).as_quat()
+        # 用 IK 把“目标末端位姿”转换成“目标关节角”
         result_QP = self.ik_arm_solve(target_pos, target_quat)
         if DEBUG_ARM: print("result_QP: ", result_QP)
-        # Update the qpos of the arm with the IK solution
+        # 把 IK 的结果写到独立的机械臂模型里，便于后面继续算新的末端状态
         self.data_arm.qpos[0:6] = result_QP[0]
         mujoco.mj_fwdPosition(self.model_arm, self.data_arm)
         
-        # Compute the ee_length
+        # 末端离机械臂基座的长度，用于做工作空间/越界相关判断
         relative_ee_pos = target_pos - self.data_arm.body("arm_base").xpos
         ee_length = np.linalg.norm(relative_ee_pos)
 
@@ -275,15 +287,17 @@ class MJ_DCMM(object):
         """
         Solve the IK problem for the arm.
         """
-        # Update the arm joint position to the previous one
+        # 目标位姿先转成 IK 求解器需要的齐次变换矩阵
         Tep = calculate_arm_Te(target_pose, target_quate)
         if DEBUG_ARM: print("Tep: ", Tep)
+        # 给定目标位姿和当前关节角，求一个新的 6 维关节解
         result_QP = self.ik_arm.solve(self.model_arm, self.data_arm, Tep, self.data_arm.qpos[0:6])
         return result_QP
 
     def set_throw_pos_vel(self, 
                           pose = np.array([0, 0, 0, 1, 0, 0, 0]), 
                           velocity = np.array([0, 0, 0, 0, 0, 0])):
+        # 直接设置物体的位姿和速度；环境 reset / 抛掷阶段会调用
         self.data.qpos[37:44] = pose
         self.data.qvel[36:42] = velocity
 
@@ -291,6 +305,8 @@ class MJ_DCMM(object):
         """
         Convert the action of the hand to the joint positions.
         """
+        # PPO 输出的是 12 维手部动作增量；
+        # 这里把它映射到 16 维 Leap Hand 目标关节角上
         # Thumb
         self.target_hand_qpos[13] += action_hand[9]
         self.target_hand_qpos[14] += action_hand[10]
@@ -320,17 +336,16 @@ class MJ_DCMM(object):
         if not self.cam_init:
             self.create_camera_data(DcmmCfg.cam_config["width"], DcmmCfg.cam_config["height"], camera)
 
-        # Create coordinate vector
+        # 先把像素点从图像坐标还原到相机坐标系
         pixel_coord = np.array([pixel_x, 
                                 pixel_y, 
                                 1]) * (depth)
         
-        # Get position relative to camera
         pos_c = np.linalg.inv(self.cam_matrix) @ pixel_coord
-        # Transform to the global frame axis
+        # MuJoCo 相机坐标系和世界坐标系轴定义不同，这里要做轴变换
         pos_c[1] *= -1
         pos_c[1], pos_c[2] = pos_c[2], pos_c[1]
-        # Get world position
+        # 最后再变换到世界坐标系
         pos_w = self.cam_rot_mat @ (pos_c) + self.cam_pos
 
         return pos_c, pos_w
@@ -343,6 +358,7 @@ class MJ_DCMM(object):
             depth: The depth array to be converted.
         """
 
+        # MuJoCo depth buffer 不是直接的米，需要根据 near / far 平面反算
         extend = self.model.stat.extent
         near = self.model.vis.map.znear * extend
         far = self.model.vis.map.zfar * extend
@@ -353,17 +369,15 @@ class MJ_DCMM(object):
         """
         Initializes all camera parameters that only need to be calculated once.
         """
-
+        # 这里只计算一次相机内参和外参，后面像素转世界坐标会重复用到
         cam_id = self.model.camera(camera).id
-        # Get field of view
         fovy = self.model.cam_fovy[cam_id]
-        # Calculate focal length
         f = 0.5 * height / np.tan(fovy * np.pi / 360)
-        # Construct camera matrix
+        # 相机内参矩阵 K
         self.cam_matrix = np.array(((f, 0, width / 2), (0, f, height / 2), (0, 0, 1)))
-        # Rotation of camera in world coordinates
+        # 相机旋转矩阵：把相机坐标系方向转到世界坐标系方向
         self.cam_rot_mat = self.model.cam_mat0[cam_id]
         self.cam_rot_mat = np.reshape(self.cam_rot_mat, (3, 3)) @ np.array([[1, 0, 0], [0, 0, 1], [0, -1, 0]])
-        # Position of camera in world coordinates
+        # 相机在世界坐标系中的位置
         self.cam_pos = self.model.cam_pos0[cam_id] + self.data.body("base_link").xpos - self.data.body("arm_base").xpos
         self.cam_init = True

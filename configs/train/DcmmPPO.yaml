@@ -1,46 +1,47 @@
+# 继承上一级 config.yaml 里的随机种子
 seed: ${..seed}
 algo: PPO
 
 network:
   mlp:
-    units: [256, 128]
+    units: [256, 128] # Actor / Critic MLP 的隐藏层规模
     # units_track: [512, 256, 128]
     # units_catch: [128, 64]
-  separate_value_mlp: True
+  separate_value_mlp: True # True 表示 actor 和 critic 各自使用独立的 MLP
 
 ppo:
-  name: ${resolve_default:Dcmm,${...experiment}}
-  normalize_input: True
-  normalize_value: True
-  value_bootstrap: True
-  num_actors: ${resolve_default:1,${...num_envs}}
-  reward_scale_value: 0.1
-  clip_value_loss: False
-  normalize_advantage: True
-  gamma: 0.99
-  tau: 0.95
-  learning_rate: 5e-4
-  lr_schedule: kl # 'fixed' | 'linear' | 'kl' | 'cos'
-  kl_threshold: 0.016
-  save_best_after: 500
-  save_frequency: 2000
-  grad_norm: 1.0
-  entropy_coef: 0.0
-  freeze_base: False
-  freeze_arm: False
-  truncate_grads: True
-  e_clip: 0.2
-  action_track_denorm: [1.5, 0.025, 0.01] # 1.5 for the base action, 0.025 for the end-effector action, 0.15 for the hand action
+  name: ${resolve_default:Dcmm,${...experiment}} # 实验名；如果上层没给 experiment，就默认用 Dcmm
+  normalize_input: True # 是否对输入观测做标准化
+  normalize_value: True # 是否对 value / return 做标准化
+  value_bootstrap: True # 轨迹末尾是否用最后状态的 value 做 bootstrap
+  num_actors: ${resolve_default:1,${...num_envs}} # 并行环境数，通常等于 num_envs
+  reward_scale_value: 0.1 # 对环境 reward 的整体缩放系数
+  clip_value_loss: False # 是否对 critic 的 value loss 也做 clip
+  normalize_advantage: True # 是否对 advantage 做标准化
+  gamma: 0.99 # 折扣因子：越接近 1，越重视长期回报
+  tau: 0.95 # GAE 的 lambda（这里变量名写成 tau）
+  learning_rate: 5e-4 # Adam 学习率
+  lr_schedule: kl # 学习率调度策略：'fixed' | 'linear' | 'kl' | 'cos'
+  kl_threshold: 0.016 # 当 lr_schedule=kl 时，用 KL 散度动态调学习率的阈值
+  save_best_after: 500 # 训练多少步之后才开始保存 best 模型
+  save_frequency: 2000 # 每隔多少 agent steps 保存一次 last 模型
+  grad_norm: 1.0 # 梯度裁剪上限，防止梯度爆炸
+  entropy_coef: 0.0 # 熵奖励系数；越大越鼓励探索
+  freeze_base: False # 是否冻结底盘相关参数（当前一般不冻结）
+  freeze_arm: False # 是否冻结机械臂相关参数（当前一般不冻结）
+  truncate_grads: True # 是否启用梯度裁剪
+  e_clip: 0.2 # PPO clip 系数，限制新旧策略变化过大
+  action_track_denorm: [1.5, 0.025, 0.01] # Tracking 动作反归一化系数：底盘 / 末端 / 手
   # action_catch_denorm: [0.25, 0.01, 0.15] # 1.5 for the base action, 0.025 for the end-effector action, 0.15 for the hand action
-  action_catch_denorm: [1.5, 0.025, 0.15]
-  horizon_length: 64
-  minibatch_size: 512
-  mini_epochs: 2
-  critic_coef: 4
-  clip_value: True
-  bounds_loss_coef: 0.0001
-  max_agent_steps: 500000
-  test_num_episodes: 100
-  max_test_steps: 10000
-  img_dim: [112, 112]
-  num_frames: 2
+  action_catch_denorm: [1.5, 0.025, 0.15] # Catching 动作反归一化系数
+  horizon_length: 64 # 每个并行环境一次采样多少步
+  minibatch_size: 512 # 每次参数更新喂给网络的样本数
+  mini_epochs: 2 # 同一批采样数据重复训练多少轮
+  critic_coef: 4 # critic loss 的权重
+  clip_value: True # 是否对 value 目标做截断式更新
+  bounds_loss_coef: 0.0001 # 动作边界约束损失系数
+  max_agent_steps: 500000 # 最大训练步数；达到后停止训练
+  test_num_episodes: 100 # 测试时跑多少个 episode
+  max_test_steps: 10000 # 单次测试最多运行多少环境步
+  img_dim: [112, 112] # 如果用图像观测，图像尺寸
+  num_frames: 2 # 连续堆叠多少帧图像

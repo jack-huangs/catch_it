@@ -103,15 +103,15 @@ class DcmmVecEnv(gym.Env):
     def __init__(
         self,
         task="tracking",
-        render_mode="depth_array",
+        render_mode="depth_array",#在gym环境中，render_mode参数指定了环境渲染的方式。
         render_per_step=False,
-        viewer=False,
-        imshow_cam=False,
-        object_eval=False,
-        camera_name=["top", "wrist"],
+        viewer=False,#viewer参数决定是否显示MuJoCo的图形界面，通常在训练过程中会关闭以节省资源，而在调试或演示时会打开。
+        imshow_cam=False,#摄像头的图像
+        object_eval=False,#是否使用评估对象（通常是训练过程中未见过的对象），用于测试策略的泛化能力
+        camera_name=["top", "wrist"],#
         object_name="object",
-        env_time=6.0,
-        steps_per_policy=20,
+        env_time=6.0, #环境的最大时间，单位为秒
+        steps_per_policy=20, #每个策略动作持续的仿真步数
         img_size=(480, 640),
         device='cuda:0',
         print_obs=False,
@@ -120,6 +120,9 @@ class DcmmVecEnv(gym.Env):
         print_info=False,
         print_contacts=False,
     ):
+        # 这个环境只支持两类任务：
+        # 1. Tracking：追踪飞来的物体
+        # 2. Catching：在追踪基础上尝试抓取
         if task not in ["Tracking", "Catching"]:
             raise ValueError("Invalid task: {}".format(task))
         assert render_mode is None or render_mode in self.metadata["render_modes"]
@@ -138,27 +141,29 @@ class DcmmVecEnv(gym.Env):
         self.print_ctrl = print_ctrl
         self.print_info = print_info
         self.print_contacts = print_contacts
-        # Initialize the environment
+        # 构建底层 MuJoCo 机器人对象。后面底盘、机械臂、手的控制都由它负责。
         self.Dcmm = MJ_DCMM(viewer=viewer, object_name=object_name, object_eval=object_eval)
         # self.Dcmm.show_model_info()
+        # fps 不是渲染帧率，而是“策略步”对应的观测差分频率
         self.fps = 1 / (self.steps_per_policy * self.Dcmm.model.opt.timestep)
-        # Randomize the Object Info
+        # 下面这些变量控制每个 episode 中物体的随机化与抛掷逻辑
         self.random_mass = 0.25
         self.object_static_time = 0.75
-        self.object_throw = False
+        self.object_throw = False #物体是否已经被扔出
         self.object_train = True
         if object_eval: self.set_object_eval()
+        # 根据训练/评估模式重写 XML 中的物体参数，然后重新创建 MuJoCo model/data
         self.Dcmm.model_xml_string = self._reset_object()
         self.Dcmm.model = mujoco.MjModel.from_xml_string(self.Dcmm.model_xml_string)
         self.Dcmm.data = mujoco.MjData(self.Dcmm.model)
-        # Get the geom id of the hand, the floor and the object
+        # 提前记录关键 geom 的 id，后面做接触检测时会反复使用
         self.hand_start_id = mujoco.mj_name2id(self.Dcmm.model, mujoco.mjtObj.mjOBJ_GEOM, 'mcp_joint') - 1
         print("self.hand_start_id: ", self.hand_start_id)
         self.floor_id = mujoco.mj_name2id(self.Dcmm.model, mujoco.mjtObj.mjOBJ_GEOM, 'floor')
         self.object_id = mujoco.mj_name2id(self.Dcmm.model, mujoco.mjtObj.mjOBJ_GEOM, self.object_name)
         self.base_id = mujoco.mj_name2id(self.Dcmm.model, mujoco.mjtObj.mjOBJ_GEOM, 'ranger_base')
 
-        # Set the camera configuration
+        # 配置相机和渲染器
         self.Dcmm.model.vis.global_.offwidth = DcmmCfg.cam_config["width"]
         self.Dcmm.model.vis.global_.offheight = DcmmCfg.cam_config["height"]
         self.mujoco_renderer = MujocoRenderer(
@@ -176,19 +181,20 @@ class DcmmVecEnv(gym.Env):
             # self.viewer.cam.elevation = -1.57
         else: self.Dcmm.viewer = None
 
-        # Observations are dictionaries with the agent's and the object's state. (dim = 44)
+        # 观测空间是一个嵌套字典：
+        # base / arm / hand / object 分别表示底盘、机械臂、手、目标物体的状态
         hand_joint_indices = np.where(DcmmCfg.hand_mask == 1)[0] + 15
         self.observation_space = spaces.Dict(
             {
                 "base": spaces.Dict({
-                    "v_lin_2d": spaces.Box(-4, 4, shape=(2,), dtype=np.float32),
+                    "v_lin_2d": spaces.Box(-4, 4, shape=(2,), dtype=np.float32),#二维线速度，BOX连续空间，范围是-4到4，形状是2维，数据类型是float32
                 }),
                 "arm": spaces.Dict({
-                    "ee_pos3d": spaces.Box(-10, 10, shape=(3,), dtype=np.float32),
-                    "ee_quat": spaces.Box(-1, 1, shape=(4,), dtype=np.float32),
-                    "ee_v_lin_3d": spaces.Box(-1, 1, shape=(3,), dtype=np.float32),
-                    "joint_pos": spaces.Box(low = np.array([self.Dcmm.model.jnt_range[i][0] for i in range(9, 15)]),
-                                            high = np.array([self.Dcmm.model.jnt_range[i][1] for i in range(9, 15)]),
+                    "ee_pos3d": spaces.Box(-10, 10, shape=(3,), dtype=np.float32),#end-effector 3D position	末端三维位置
+                    "ee_quat": spaces.Box(-1, 1, shape=(4,), dtype=np.float32),#end-effector  quaternion	末端姿态四元数
+                    "ee_v_lin_3d": spaces.Box(-1, 1, shape=(3,), dtype=np.float32),#end-effector 3D linear velocity	末端三维线速度
+                    "joint_pos": spaces.Box(low = np.array([self.Dcmm.model.jnt_range[i][0] for i in range(9, 15)]),#取的是 MuJoCo 模型里第 9 到第 14 号关节
+                                            high = np.array([self.Dcmm.model.jnt_range[i][1] for i in range(9, 15)]),#model.jnt_range[i][1]模型第i个关节的最大值
                                             dtype=np.float32),
                 }),
                 "hand": spaces.Box(low = np.array([self.Dcmm.model.jnt_range[i][0] for i in hand_joint_indices]),
@@ -216,12 +222,14 @@ class DcmmVecEnv(gym.Env):
         self.init_pos = True
         self.initial_ee_pos3d = self._get_relative_ee_pos3d()
         self.initial_obj_pos3d = self._get_relative_object_pos3d()
-        self.prev_ee_pos3d = np.array([0.0, 0.0, 0.0])
+        self.prev_ee_pos3d = np.array([0.0, 0.0, 0.0]) #上一步末端位置
         self.prev_obj_pos3d = np.array([0.0, 0.0, 0.0])
-        self.prev_ee_pos3d[:] = self.initial_ee_pos3d[:]
+        self.prev_ee_pos3d[:] = self.initial_ee_pos3d[:] 
         self.prev_obj_pos3d[:] = self.initial_obj_pos3d[:]
 
-        # Actions (dim = 20)
+        # 动作空间也是字典：
+        # base 控底盘速度，arm 控末端位姿增量，hand 控手指关节
+        # 每个low，high表示动作或状态每一维允许的最小值和最大值。
         self.action_space = spaces.Dict(
             {
                 "base": spaces.Box(base_low, base_high, shape=(2,), dtype=np.float32),
@@ -231,6 +239,7 @@ class DcmmVecEnv(gym.Env):
                                    dtype = np.float32),
             }
         )
+        # 动作延迟缓冲区：模拟真实系统中“策略输出后不会立刻生效”的情况
         self.action_buffer = {
             "base": DynamicDelayBuffer(maxlen=2),
             "arm": DynamicDelayBuffer(maxlen=2),
@@ -240,26 +249,28 @@ class DcmmVecEnv(gym.Env):
         self.actions_low = np.concatenate([base_low, arm_low, hand_low])
         self.actions_high = np.concatenate([base_high, arm_high, hand_high])
 
+        # 下面这些维度会被 PPO 直接读取：
+        # Tracking 会去掉手部观测/动作，Catching 会保留更多维度
         self.obs_dim = get_total_dimension(self.observation_space)
         self.act_dim = get_total_dimension(self.action_space)
-        self.obs_t_dim = self.obs_dim - 12 - 6  # dim = 18, 12 for the hand, 6 for the arm joint positions
+        self.obs_t_dim = self.obs_dim - 12 - 6  # dim = 18, 12 for the hand, 6 for the arm joint positions ，Tracking 任务从完整观测里去掉了两部分，手部观测，机械臂关节位置
         self.act_t_dim = self.act_dim - 12 # dim = 6, 12 for the hand
         self.obs_c_dim = self.obs_dim - 6  # dim = 30, 6 for the arm joint positions
         self.act_c_dim = self.act_dim # dim = 18,
         print("##### Tracking Task \n obs_dim: {}, act_dim: {}".format(self.obs_t_dim, self.act_t_dim))
         print("##### Catching Task \n obs_dim: {}, act_dim: {}\n".format(self.obs_c_dim, self.act_c_dim))
 
-        # Init env params
-        self.arm_limit = True
+        # 环境运行过程中的状态变量
+        self.arm_limit = True 
         self.terminated = False
         self.start_time = self.Dcmm.data.time
         self.catch_time = self.Dcmm.data.time - self.start_time
         self.reward_touch = 0
-        self.reward_stability = 0
+        self.reward_stability = 0 
         self.env_time = env_time
         self.stage_list = ["tracking", "grasping"]
         # Default stage is "tracking"
-        self.stage = self.stage_list[0]
+        self.stage = self.stage_list[0] #当前阶段是 tracking 还是 grasping
         self.steps = 0
 
         self.prev_ctrl = np.zeros(18)
@@ -268,9 +279,9 @@ class DcmmVecEnv(gym.Env):
         self.vel_history = deque(maxlen=4)
 
         self.info = {
-            "ee_distance": np.linalg.norm(self.Dcmm.data.body("link6").xpos - 
-                                          self.Dcmm.data.body(self.Dcmm.object_name).xpos[0:3]),
-            "base_distance": np.linalg.norm(self.Dcmm.data.body("arm_base").xpos[0:2] - 
+            "ee_distance": np.linalg.norm(self.Dcmm.data.body("link6").xpos -  #机械臂末端执行器到物体的三维欧氏距离。机械臂末端 link6 的三维位置 [x, y, z]，
+                                          self.Dcmm.data.body(self.Dcmm.object_name).xpos[0:3]),#物体的三维位置 [x, y, z]，np.linalg.norm(...)求这个向量的长度
+            "base_distance": np.linalg.norm(self.Dcmm.data.body("arm_base").xpos[0:2] -  #机械臂基座在水平面上到物体的二维距离。
                                             self.Dcmm.data.body(self.Dcmm.object_name).xpos[0:2]),
             "env_time": self.Dcmm.data.time - self.start_time,
             "imgs": {}
@@ -406,13 +417,14 @@ class DcmmVecEnv(gym.Env):
         return np.array([object_v_lin_x, object_v_lin_y, global_object_v_lin[2]-base_vel[2]])
 
     def _get_obs(self):
+        # 每一步都重新组装一份观测给策略网络
         ee_pos3d = self._get_relative_ee_pos3d()
         obj_pos3d = self._get_relative_object_pos3d()
         if self.init_pos:
             self.prev_ee_pos3d[:] = ee_pos3d[:]
             self.prev_obj_pos3d[:] = obj_pos3d[:]
             self.init_pos = False
-        # Add Obs Noise (Additive self.k_obs_base/arm/hand/object)
+        # 给观测加噪声，模拟真实传感器误差，提高策略鲁棒性
         obs = {
             "base": {
                 "v_lin_2d": self._get_base_vel() + np.random.normal(0, self.k_obs_base, 2),
@@ -473,17 +485,19 @@ class DcmmVecEnv(gym.Env):
         }
     
     def update_target_ctrl(self):
+        # 把“这一步策略输出的目标动作”压进延迟缓冲区
         self.action_buffer["base"].append(copy.deepcopy(self.Dcmm.target_base_vel[:]))
         self.action_buffer["arm"].append(copy.deepcopy(self.Dcmm.target_arm_qpos[:]))
         self.action_buffer["hand"].append(copy.deepcopy(self.Dcmm.target_hand_qpos[:]))
 
     def _get_ctrl(self):
-        # Map the action to the control 
+        # 把高层目标动作转成 MuJoCo 真正执行的底层控制量：
+        # 底盘靠 IK + PID，机械臂和手靠 PID
         mv_steer, mv_drive = self.Dcmm.move_base_vel(self.action_buffer["base"][0]) # 8
         mv_arm = self.Dcmm.arm_pid.update(self.action_buffer["arm"][0], self.Dcmm.data.qpos[15:21], self.Dcmm.data.time) # 6
         mv_hand = self.Dcmm.hand_pid.update(self.action_buffer["hand"][0], self.Dcmm.data.qpos[21:37], self.Dcmm.data.time) # 16
         ctrl = np.concatenate([mv_steer, mv_drive, mv_arm, mv_hand], axis=0)
-        # Add Action Noise (Scale with self.k_act)
+        # 给控制量加噪声，模拟执行误差
         ctrl *= np.random.normal(1, self.k_act, 30)
         if self.print_ctrl:
             print("##### ctrl:")
@@ -564,12 +578,10 @@ class DcmmVecEnv(gym.Env):
         self.k_steer = np.random.uniform(0, 1, size=4)
         self.k_hand = np.random.uniform(0, 1, size=1)
         # Reset the PID Controller
-        self.Dcmm.arm_pid.reset(self.k_arm*(DcmmCfg.k_arm[1]-DcmmCfg.k_arm[0])+DcmmCfg.k_arm[0])
-        self.Dcmm.steer_pid.reset(self.k_steer*(DcmmCfg.k_steer[1]-DcmmCfg.k_steer[0])+DcmmCfg.k_steer[0])
-        self.Dcmm.drive_pid.reset(self.k_drive*(DcmmCfg.k_drive[1]-DcmmCfg.k_drive[0])+DcmmCfg.k_drive[0])
-        self.Dcmm.hand_pid.reset(self.k_hand[0]*(DcmmCfg.k_hand[1]-DcmmCfg.k_hand[0])+DcmmCfg.k_hand[0])
-    
-    def random_delay(self):
+        self.Dcmm.arm_pid.reset(self.k_arm*(DcmmCfg.k_arm[1]-DcmmCfg.k_arm[0])+DcmmCfg.k_arm[0])#控机械臂的 PID，作用是把“策略输出的末端位姿增量”转成“每个机械臂关节的目标位置”
+        self.Dcmm.steer_pid.reset(self.k_steer*(DcmmCfg.k_steer[1]-DcmmCfg.k_steer[0])+DcmmCfg.k_steer[0])#控底盘转向的 PID，作用是把“策略输出的底盘速度”转成“底盘的转向角度”
+        self.Dcmm.drive_pid.reset(self.k_drive*(DcmmCfg.k_drive[1]-DcmmCfg.k_drive[0])+DcmmCfg.k_drive[0]) #控底盘驱动轮速度的 PID，作用是把“策略输出的底盘速度”转成“每个轮子的转速”
+        self.Dcmm.hand_pid.reset(self.k_hand[0]*(DcmmCfg.k_hand[1]-DcmmCfg.k_hand[0])+DcmmCfg.k_hand[0])#控手指关节的 PID，作用是把“策略输出的手指关节位置”转成“每个手指关节的力
         # Random the Delay Buffer Params in DCMM
         self.action_buffer["base"].set_maxlen(np.random.choice(DcmmCfg.act_delay['base']))
         self.action_buffer["arm"].set_maxlen(np.random.choice(DcmmCfg.act_delay['arm']))
@@ -580,7 +592,8 @@ class DcmmVecEnv(gym.Env):
         self.action_buffer["hand"].clear()
 
     def _reset_simulation(self):
-        # Reset the data in Mujoco Simulation
+        # 真正的“物理世界重置”都在这里做：
+        # 清空状态、还原关节、随机目标物体、随机重力、随机 PID、随机延迟
         mujoco.mj_resetData(self.Dcmm.model, self.Dcmm.data)
         mujoco.mj_resetData(self.Dcmm.model_arm, self.Dcmm.data_arm)
         if self.Dcmm.model.na == 0:
@@ -593,7 +606,7 @@ class DcmmVecEnv(gym.Env):
         self.Dcmm.data.qpos[21:37] = DcmmCfg.hand_joints[:]
         self.Dcmm.data_arm.qpos[0:6] = DcmmCfg.arm_joints[:]
         self.Dcmm.data.body("object").xpos[0:3] = np.array([2, 2, 1])
-        # Random 3D position TODO: Adjust to the fov
+        # 随机生成物体初始位置、初速度和姿态
         self.random_object_pose()
         self.Dcmm.set_throw_pos_vel(pose=np.concatenate((self.object_pos3d[:], self.object_q[:])),
                                     velocity=np.zeros(6))
@@ -610,8 +623,10 @@ class DcmmVecEnv(gym.Env):
         mujoco.mj_forward(self.Dcmm.model, self.Dcmm.data)
         mujoco.mj_forward(self.Dcmm.model_arm, self.Dcmm.data_arm)
 
+
     def reset(self):
-        # Reset the basic simulation
+        # Gym 接口：开始一个新 episode
+        # 这里会重置物理世界、重置任务状态，并返回初始 observation / info
         self._reset_simulation()
         self.init_ctrl = True
         self.init_pos = True
@@ -641,12 +656,12 @@ class DcmmVecEnv(gym.Env):
                                              self.Dcmm.data.body(self.Dcmm.object_name).xpos[0:2]),
             "evn_time": self.Dcmm.data.time - self.start_time,
         }
-        # Get the observation and info
+        # 重新计算本回合起点的观测和辅助信息
         self.prev_ee_pos3d[:] = self.initial_ee_pos3d[:]
         self.prev_obj_pos3d = self._get_relative_object_pos3d()
         observation = self._get_obs()
         info = self._get_info()
-        # Rendering
+        # 初始时刻也可以返回一帧渲染结果，供可视化或调试使用
         imgs = self.render()
         info['imgs'] = imgs
         ctrl_delay = np.array([len(self.action_buffer['base']),
@@ -656,7 +671,7 @@ class DcmmVecEnv(gym.Env):
 
         return observation, info
 
-    def norm_ctrl(self, ctrl, components):
+    def norm_ctrl(self, ctrl, components): #计算控制量的大小，超参数 r_ctrl
         '''
         Convert the ctrl (dict type) to the numpy array and return its norm value
         Input: ctrl, dict
@@ -664,6 +679,7 @@ class DcmmVecEnv(gym.Env):
         '''
         ctrl_array = np.concatenate([ctrl[component]*DcmmCfg.reward_weights['r_ctrl'][component] for component in components])
         return np.linalg.norm(ctrl_array)
+
 
     def compute_reward(self, obs, info, ctrl):
         '''
@@ -675,28 +691,30 @@ class DcmmVecEnv(gym.Env):
         - Collision Penalty
         - Constraint Penalty
         '''
+        # 这个函数就是“裁判”：
+        # 根据机器人本步的表现给出一个标量奖励 reward
         rewards = 0.0
-        ## Object Position Reward (-inf, 0)
-        # Compute the closest distance the end-effector comes to the object
-        reward_base_pos = (self.info["base_distance"] - info["base_distance"]) * DcmmCfg.reward_weights["r_base_pos"]
+        # 距离相关奖励：
+        # 如果这一步比上一步更接近物体，就得到正奖励
+        #(1) 底座接近奖励
+        reward_base_pos = (self.info["base_distance"] - info["base_distance"]) * DcmmCfg.reward_weights["r_base_pos"] #self.info表示“上一步保存下来的信息”
+        #(2) 末端接近奖励
         reward_ee_pos = (self.info["ee_distance"] - info["ee_distance"]) * DcmmCfg.reward_weights["r_ee_pos"]
+        #(3) 精确接近奖励，只有当末端非常接近物体时，这项才会大
         reward_ee_precision = math.exp(-50*info["ee_distance"]**2) * DcmmCfg.reward_weights["r_precision"]
 
-        ## Collision Penalty
-        # Compute the Penalty when the arm is collided with the mobile base
+        # 碰撞惩罚：如果底盘/机器人发生了不该有的接触，就扣分
         reward_collision = 0
         if self.contacts['base_contacts'].size != 0:
-            reward_collision = DcmmCfg.reward_weights["r_collision"]
+            reward_collision = DcmmCfg.reward_weights["r_collision"] #如果发生了碰撞
         
-        ## Constraint Penalty
-        # Compute the Penalty when the arm joint position is out of the joint limits
+        # (5) 约束惩罚：IK 失败或机械臂越界时，说明动作不合理，也要扣分
         reward_constraint = 0 if self.arm_limit else -1
         reward_constraint *= DcmmCfg.reward_weights["r_constraint"]
 
-        ## Object Touch Success Reward
-        # Compute the reward when the object is caught successfully by the hand
+        # (6) 接触奖励：本步如果成功碰到物体，就给额外奖励
         if self.step_touch:
-            # print("TRACK SUCCESS!!!!!")
+            print("TRACK SUCCESS!!!!!")
             if not self.reward_touch:
                 self.catch_time = self.Dcmm.data.time - self.start_time
             self.reward_touch = DcmmCfg.reward_weights["r_touch"][self.task]
@@ -704,6 +722,7 @@ class DcmmVecEnv(gym.Env):
             self.reward_touch = 0
 
         if self.task == "Catching":
+            # Catching 任务分 tracking / grasping 两个阶段，奖励也不同
             reward_orient = 0
             ## Calculate the total reward in different stages
             if self.stage == "tracking":
@@ -752,18 +771,21 @@ class DcmmVecEnv(gym.Env):
                     ))
                     print("total reward: {:.3f}\n".format(rewards))
         elif self.task == 'Tracking':
-            ## Ctrl Penalty
-            # Compute the norm of base and arm movement through the current actions in the grasping stage
+            # Tracking 任务只关心“把手掌追到物体附近”
+            # 因此主要奖励项是：接近目标、姿态合适、控制平稳、成功触碰
+            #(7) 控制惩罚 ，动作越大，惩罚越大
             reward_ctrl = - self.norm_ctrl(ctrl, {"base", "arm"})
             ## Object Orientation Reward
             # Compute the dot product of the velocity vector of the object and the z axis of the end_effector
             rotation_matrix = quaternion_to_rotation_matrix(obs["arm"]["ee_quat"])
             local_velocity_vector = np.dot(rotation_matrix.T, obs["object"]["v_lin_3d"])
             hand_z_axis = np.array([0, 0, 1])
+
+            #(8) 姿态奖励
             reward_orient = abs(cos_angle_between_vectors(local_velocity_vector, hand_z_axis)) * DcmmCfg.reward_weights["r_orient"]
-            ## Add up the rewards
+            ## ！！！Tracking 总奖励
             rewards = reward_base_pos + reward_ee_pos + reward_ee_precision + reward_orient + reward_ctrl + reward_collision + reward_constraint + self.reward_touch
-            if self.print_reward:
+            if self.print_reward: #打印奖励
                 if reward_constraint < 0:
                     print("ctrl: ", ctrl)
                 print("### print reward")
@@ -779,8 +801,11 @@ class DcmmVecEnv(gym.Env):
         return rewards
 
     def _step_mujoco_simulation(self, action_dict):
+        # 这个函数是真正的“执行动作”：
+        # 它把 PPO 给的高层动作转成机器人目标，再在 MuJoCo 里连续模拟若干小步
         ## TODO: Low-Pass-Filter the Base Velocity
         self.Dcmm.target_base_vel[0:2] = action_dict['base']
+        # 机械臂动作只给了 4 维，这里补成 6 维位姿增量再做 IK
         action_arm = np.concatenate((action_dict["arm"], np.zeros(3)))
         result_QP, _ = self.Dcmm.move_ee_pose(action_arm)
         if result_QP[1]:
@@ -789,13 +814,15 @@ class DcmmVecEnv(gym.Env):
         else:
             # print("IK Failed!!!")
             self.arm_limit = False
+        # 手部动作转成目标关节角
         self.Dcmm.action_hand2qpos(action_dict["hand"])
-        # Add Target Action to the Buffer
+        # 把目标动作压入延迟缓冲区，后续控制器读取缓冲区前端的动作执行
         self.update_target_ctrl()
-        # Reset the Criteria for Successfully Touch
+        # 每一步开始前先清空“本步是否碰到物体”的标志
         self.step_touch = False
+        # 一次策略动作会执行 steps_per_policy 个 MuJoCo 小步
         for _ in range(self.steps_per_policy):
-            # Update the control command according to the latest policy output
+            # 根据目标动作和当前状态，生成底层控制量并写入 MuJoCo
             self.Dcmm.data.ctrl[:-1] = self._get_ctrl()
             if self.render_per_step:
                 # Rendering
@@ -803,6 +830,7 @@ class DcmmVecEnv(gym.Env):
             # As of MuJoCo 2.0, force-related quantities like cacc are not computed
             # unless there's a force sensor in the model.
             # See https://github.com/openai/gym/issues/1541
+            # 物体一开始会静止悬一小段时间，然后才真正被“扔”出去
             if self.Dcmm.data.time - self.start_time < self.object_static_time:
                 self.Dcmm.set_throw_pos_vel(pose=np.concatenate((self.object_pos3d[:], self.object_q[:])),
                                             velocity=np.zeros(6))
@@ -816,47 +844,50 @@ class DcmmVecEnv(gym.Env):
             mujoco.mj_step(self.Dcmm.model, self.Dcmm.data)
             mujoco.mj_rnePostConstraint(self.Dcmm.model, self.Dcmm.data)
 
-            # Update the contact information
+            # 更新接触信息，用于后面判断“成功触碰”还是“失败碰撞”
             self.contacts = self._get_contacts()
-            # Whether the base collides
+            # 底盘碰撞直接视为失败
             if self.contacts['base_contacts'].size != 0:
                 self.terminated = True
             mask_coll = self.contacts['object_contacts'] < self.hand_start_id
             mask_finger = self.contacts['object_contacts'] > self.hand_start_id
             mask_hand = self.contacts['object_contacts'] >= self.hand_start_id
             mask_palm = self.contacts['object_contacts'] == self.hand_start_id
-            # Whether the object is caught
+            # 根据接触部位判断是否算“成功碰到物体”
             if self.step_touch == False:
                 if self.task == "Catching" and np.any(mask_hand):
                     self.step_touch = True
                 elif self.task == "Tracking" and np.any(mask_palm):
                     self.step_touch = True
-            # Whether the object falls
+            # 根据错误接触判断是否提前失败结束
             if not self.terminated:
                 if self.task == "Catching":
                     self.terminated = np.any(mask_coll)
                 elif self.task == "Tracking":
                     self.terminated = np.any(mask_coll) or np.any(mask_finger)
-            # If the object falls, terminate the episode in advance
+            # 一旦失败，本步后面的 MuJoCo 小步就不用再跑了
             if self.terminated:
                 break
 
     def step(self, action):
+        # Gym 接口：策略每给一次动作，就调用一次 step()
+        # 这里会返回“下一状态、奖励、是否结束、额外信息”
         self.steps += 1
         self._step_mujoco_simulation(action)
-        # Get the obs and info
+        # 先根据最新仿真状态重新计算观测和辅助信息
         obs = self._get_obs()
         info = self._get_info()
         if self.task == 'Catching':
+            # Catching 任务中，靠近后进入 grasping 阶段；抓取阶段如果又离远了就失败
             if info['ee_distance'] < DcmmCfg.distance_thresh and self.stage == "tracking":
                 self.stage = "grasping"
             elif info['ee_distance'] >= DcmmCfg.distance_thresh and self.stage == "grasping":
                 self.terminated = True
-        # Design the reward function
+        # 根据本步表现打分
         reward = self.compute_reward(obs, info, action)
         self.info["base_distance"] = info["base_distance"]
         self.info["ee_distance"] = info["ee_distance"]
-        # Rendering
+        # 附带一帧图像信息，供调试/可视化使用
         imgs = self.render()
         # Update the imgs
         info['imgs'] = imgs
@@ -864,7 +895,9 @@ class DcmmVecEnv(gym.Env):
                                len(self.action_buffer['arm']),
                                len(self.action_buffer['hand'])])
         info['ctrl_params'] = np.concatenate((self.k_arm, self.k_drive, self.k_hand, ctrl_delay))
-        # The episode is truncated if the env_time is larger than the predefined time
+        # terminated / truncated 的含义：
+        # - terminated：失败结束（碰撞、错误接触等）
+        # - truncated：正常结束（Tracking 碰到目标；Catching 时间到）
         if self.task == "Catching":
             if info["env_time"] > self.env_time:
                 # print("Catching Success!!!!!!")

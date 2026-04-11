@@ -16,17 +16,27 @@ from .utils import AverageScalarMeter, RunningMeanStd
 from tensorboardX import SummaryWriter
 
 class PPO_Catch_OneStage(object):
+    """PPO 单阶段抓取任务训练类
+
+    这个类负责：
+    - 构建网络和优化器
+    - 与环境交互收集数据
+    - 计算 PPO 损失并更新模型
+    - 保存训练结果
+    """
     def __init__(self, env, output_dif, full_config):
         self.rank = -1
         self.device = full_config['rl_device']
-        self.network_config = full_config.train.network
-        self.ppo_config = full_config.train.ppo
+        self.network_config = full_config.train.network # network_config 网络结构相关的超参数
+        self.ppo_config = full_config.train.ppo # ppo_config 相关的超参数
         # ---- build environment ----
         self.env = env
         self.num_actors = int(self.ppo_config['num_actors'])
+        # act_c_dim 是抓取任务的动作维度
         self.actions_num = self.env.call("act_c_dim")[0]
         self.actions_low = self.env.call("actions_low")[0]
         self.actions_high = self.env.call("actions_high")[0]
+        # obs_c_dim 是抓取任务的观测维度
         self.obs_shape = (self.env.call("obs_c_dim")[0],)
         self.full_action_dim = self.env.call("act_c_dim")[0]
         # ---- Model ----
@@ -37,9 +47,9 @@ class PPO_Catch_OneStage(object):
             'separate_value_mlp': self.network_config.get('separate_value_mlp', True),
         }
         print("net_config: ", net_config)
-        self.model = ActorCritic(net_config)
+        self.model = ActorCritic(net_config) # PPO 模型，包含 actor 和 critic 两部分
         self.model.to(self.device)
-        self.running_mean_std = RunningMeanStd(self.obs_shape).to(self.device)
+        self.running_mean_std = RunningMeanStd(self.obs_shape).to(self.device)#是两个标准化器
         self.value_mean_std = RunningMeanStd((1,)).to(self.device)
         # ---- Output Dir ----
         # allows us to specify a folder where all experiments will reside
@@ -49,8 +59,8 @@ class PPO_Catch_OneStage(object):
         os.makedirs(self.nn_dir, exist_ok=True)
         os.makedirs(self.tb_dif, exist_ok=True)
         # ---- Optim ----
-        self.init_lr = float(self.ppo_config['learning_rate'])
-        self.last_lr = float(self.ppo_config['learning_rate'])
+        self.init_lr = float(self.ppo_config['learning_rate']) # PPO 的初始学习率
+        self.last_lr = float(self.ppo_config['learning_rate']) # PPO 的最后学习率
         self.optimizer = torch.optim.Adam(
             self.model.parameters(), self.init_lr, eps=1e-5)
         # ---- PPO Train Param ----
@@ -73,11 +83,11 @@ class PPO_Catch_OneStage(object):
         self.clip_value_loss = self.ppo_config['clip_value_loss']
         # ---- PPO Collect Param ----
         self.horizon_length = self.ppo_config['horizon_length']
-        self.batch_size = self.horizon_length * self.num_actors
+        self.batch_size = self.horizon_length * self.num_actors 
         self.minibatch_size = self.ppo_config['minibatch_size']
         self.mini_epochs_num = self.ppo_config['mini_epochs']
         assert self.batch_size % self.minibatch_size == 0 or full_config.test
-        # ---- scheduler ----
+        # ---- scheduler ----学习率调度器，根据 KL 距离或线性衰减调整学习率，帮助训练稳定收敛。
         self.lr_schedule = self.ppo_config['lr_schedule']
         if self.lr_schedule == 'kl':
             self.kl_threshold = self.ppo_config['kl_threshold']
@@ -86,7 +96,7 @@ class PPO_Catch_OneStage(object):
             self.scheduler = LinearScheduler(
                 self.init_lr,
                 self.ppo_config['max_agent_steps'])
-        # ---- Snapshot
+        # ---- Snapshot # 保存频率和最佳模型保存相关的参数
         self.save_freq = self.ppo_config['save_frequency']
         self.save_best_after = self.ppo_config['save_best_after']
         # ---- Tensorboard Logger ----
@@ -122,6 +132,7 @@ class PPO_Catch_OneStage(object):
         self.all_time = 0
 
     def write_stats(self, a_losses, c_losses, b_losses, entropies, kls):
+        """把训练统计信息写入 WandB 和 TensorBoard"""
         log_dict = {
             'performance/RLTrainFPS': self.agent_steps / self.rl_train_time,
             'performance/EnvStepFPS': self.agent_steps / self.data_collect_time,
@@ -158,6 +169,7 @@ class PPO_Catch_OneStage(object):
             self.value_mean_std.train()
 #
     def train(self):
+        """主训练循环：不断采集数据并执行 PPO 优化"""
         start_time = time.time()
         _t = time.time()
         _last_t = time.time()
@@ -250,14 +262,15 @@ class PPO_Catch_OneStage(object):
             self.running_mean_std.load_state_dict(checkpoint['running_mean_std'])
 
     def train_epoch(self):
+        """训练一个 epoch：先收集样本，再优化网络"""
         # collect minibatch data
         _t = time.time()
-        self.set_eval()
+        self.set_eval()  # 采集数据时使用评估模式
         self.play_steps()
         self.data_collect_time += (time.time() - _t)
         # update network
         _t = time.time()
-        self.set_train()
+        self.set_train()  # 优化网络时使用训练模式
         a_losses, b_losses, c_losses = [], [], []
         entropies, kls = [], []
         for mini_ep in range(0, self.mini_epochs_num):
@@ -341,6 +354,7 @@ class PPO_Catch_OneStage(object):
         return a_losses, c_losses, b_losses, entropies, kls
     
     def obs2tensor(self, obs):
+        """把环境返回的 obs dict 转成模型可以输入的 tensor"""
         # Map the step result to tensor
         if self.env.call('task')[0] == 'Catching':
             obs_array = np.concatenate((
@@ -360,6 +374,7 @@ class PPO_Catch_OneStage(object):
         return obs_tensor
 
     def action2dict(self, actions):
+        """把模型输出的标准化动作转成环境可识别的实际动作"""
         actions = actions.cpu().numpy()
         # De-normalize the actions
         if self.env.call('task')[0] == 'Tracking':
@@ -378,6 +393,11 @@ class PPO_Catch_OneStage(object):
         return actions_dict
     
     def model_act(self, obs_dict, inference=False):
+        """给定 obs，使用当前策略生成动作。
+
+        inference=False 时返回训练所需的 action/value/logprob；
+        inference=True 时只返回动作，用于测试。
+        """
         processed_obs = self.running_mean_std(obs_dict['obs'])
         input_dict = {
             'obs': processed_obs,
@@ -391,6 +411,7 @@ class PPO_Catch_OneStage(object):
         return res_dict
 
     def play_steps(self):
+        """执行一段交互：采集 horizon_length 步的数据用于 PPO 训练"""
         for n in range(self.horizon_length):
             res_dict = self.model_act(self.obs)
             # Collect o_t
@@ -457,6 +478,7 @@ class PPO_Catch_OneStage(object):
         self.storage.data_dict['returns'] = returns
 
     def play_test_steps(self):
+        """测试阶段的交互步骤，只做前向推理和统计，不更新网络"""
         for _ in range(self.horizon_length):
             res_dict = self.model_act(self.obs, inference=True)
             # Do env step
@@ -496,6 +518,7 @@ class PPO_Catch_OneStage(object):
         self.agent_steps = (self.agent_steps + self.batch_size)
 
     def test(self):
+        """测试函数：运行多个测试回合并打印平均结果"""
         self.set_eval()
         reset_obs, _ = self.env.reset()
         self.obs = {'obs': self.obs2tensor(reset_obs)}
@@ -525,6 +548,7 @@ class PPO_Catch_OneStage(object):
 
 
 def policy_kl(p0_mu, p0_sigma, p1_mu, p1_sigma):
+    """计算两个高斯分布之间的 KL 距离，用于监测策略变化"""
     c1 = torch.log(p1_sigma/p0_sigma + 1e-5)
     c2 = (p0_sigma ** 2 + (p1_mu - p0_mu) ** 2) / (2.0 * (p1_sigma ** 2 + 1e-5))
     c3 = -1.0 / 2.0

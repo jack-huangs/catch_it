@@ -30,7 +30,7 @@ class AverageScalarMeter(object):
     def get_mean(self):
         return self.mean
 
-
+# 运行时统计模块，用于在线计算输入数据的均值和方差，支持 per-channel 统计和仅归一化两种模式。
 class RunningMeanStd(nn.Module):
     def __init__(self, insize, epsilon=1e-05, per_channel=False, norm_only=False):
         super(RunningMeanStd, self).__init__()
