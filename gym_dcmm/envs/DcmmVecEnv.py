@@ -145,7 +145,9 @@ class DcmmVecEnv(gym.Env):
         self.Dcmm = MJ_DCMM(viewer=viewer, object_name=object_name, object_eval=object_eval)
         # self.Dcmm.show_model_info()
         # fps 不是渲染帧率，而是“策略步”对应的观测差分频率
-        self.fps = 1 / (self.steps_per_policy * self.Dcmm.model.opt.timestep)
+        self.policy_dt = self.steps_per_policy * self.Dcmm.model.opt.timestep
+        self.fps = 1 / self.policy_dt
+        self.base_vel_lpf_alpha = self.policy_dt / (0.2 + self.policy_dt)
         # 下面这些变量控制每个 episode 中物体的随机化与抛掷逻辑
         self.random_mass = 0.25
         self.object_static_time = 0.75
@@ -417,31 +419,52 @@ class DcmmVecEnv(gym.Env):
         return np.array([object_v_lin_x, object_v_lin_y, global_object_v_lin[2]-base_vel[2]])
 
     def _get_obs(self):
-        # 每一步都重新组装一份观测给策略网络
+        # 这里不是“执行动作”的地方，而是“动作执行完以后，把新的物理状态读出来”
+        # step() 里先调用 _step_mujoco_simulation(action) 执行动作，
+        # MuJoCo 更新完机器人和物体状态后，再由 _get_obs() 把“新状态”整理成观测
+
+        # 读取末端和物体在相对坐标系下的位置
+        # 这些值已经反映了“刚才动作执行之后”的最新状态
         ee_pos3d = self._get_relative_ee_pos3d()
         obj_pos3d = self._get_relative_object_pos3d()
+
+        # reset 后第一次取观测时，还没有“上一帧位置”
+        # 所以先把 prev_* 初始化成当前值，避免后面速度差分异常
         if self.init_pos:
             self.prev_ee_pos3d[:] = ee_pos3d[:]
             self.prev_obj_pos3d[:] = obj_pos3d[:]
             self.init_pos = False
-        # 给观测加噪声，模拟真实传感器误差，提高策略鲁棒性
+
+        # 把当前时刻的机器人/物体状态整理成策略网络要看的 obs 字典
+        # 同时加入少量高斯噪声，模拟真实传感器误差，提高训练鲁棒性
         obs = {
             "base": {
+                # 底盘二维线速度
                 "v_lin_2d": self._get_base_vel() + np.random.normal(0, self.k_obs_base, 2),
             },
             "arm": {
+                # 机械臂末端位置（相对坐标）
                 "ee_pos3d": ee_pos3d + np.random.normal(0, self.k_obs_arm, 3),
+                # 机械臂末端姿态四元数（相对坐标）
                 "ee_quat": self._get_relative_ee_quat() + np.random.normal(0, self.k_obs_arm, 4),
+                # 末端线速度这里不是直接读传感器，而是用“当前位置 - 上一帧位置”做差分近似
+                # 所以它表示：刚才动作执行后，末端移动得有多快
                 'ee_v_lin_3d': (ee_pos3d - self.prev_ee_pos3d)*self.fps + np.random.normal(0, self.k_obs_arm, 3),
+                # 机械臂 6 个关节角
                 "joint_pos": np.array(self.Dcmm.data.qpos[15:21]) + np.random.normal(0, self.k_obs_arm, 6),
             },
+            # 手部观测
             "hand": self._get_hand_obs() + np.random.normal(0, self.k_obs_hand, 12),
             "object": {
+                # 物体位置（相对坐标）
                 "pos3d": obj_pos3d + np.random.normal(0, self.k_obs_object, 3),
                 # "v_lin_3d": self._get_relative_object_v_lin_3d() + np.random.normal(0, self.k_obs_object, 3),
+                # 物体速度同样用相邻两帧的位置差分近似
+                # 所以它也反映了动作执行后、物体在这一小段时间里的运动变化
                 "v_lin_3d": (obj_pos3d - self.prev_obj_pos3d)*self.fps + np.random.normal(0, self.k_obs_object, 3),
             },
         }
+        # 当前帧观测组装完后，把当前位置保存起来，供下一步差分速度使用
         self.prev_ee_pos3d = ee_pos3d
         self.prev_obj_pos3d = obj_pos3d
         if self.print_obs:
@@ -803,8 +826,8 @@ class DcmmVecEnv(gym.Env):
     def _step_mujoco_simulation(self, action_dict):
         # 这个函数是真正的“执行动作”：
         # 它把 PPO 给的高层动作转成机器人目标，再在 MuJoCo 里连续模拟若干小步
-        ## TODO: Low-Pass-Filter the Base Velocity
-        self.Dcmm.target_base_vel[0:2] = action_dict['base']
+        self.Dcmm.target_base_vel[0:2] *= 1.0 - self.base_vel_lpf_alpha
+        self.Dcmm.target_base_vel[0:2] += self.base_vel_lpf_alpha * action_dict["base"]
         # 机械臂动作只给了 4 维，这里补成 6 维位姿增量再做 IK
         action_arm = np.concatenate((action_dict["arm"], np.zeros(3)))
         result_QP, _ = self.Dcmm.move_ee_pose(action_arm)
