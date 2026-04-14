@@ -48,10 +48,10 @@ class ActorCritic(nn.Module):
 
         out_size = self.units[-1]
 
-        # actor 网络
+        #000000000 actor 网络
         self.actor_mlp = MLP(units=self.units, input_size=mlp_input_shape)
         # 如果 separate_value_mlp=True，critic 使用一套独立的网络
-        # 否则 actor 和 critic 用不同一个网络（虽然网络的形状相同）
+        #000000000 critic网络
         if self.separate_value_mlp:
             self.value_mlp = MLP(units=self.units, input_size=mlp_input_shape)
         # critic 网络最后一层 最终输出一个数值，表示当前状态的价值
@@ -59,7 +59,7 @@ class ActorCritic(nn.Module):
 
         #acotor最后一层 mu 动作分布的均值，如果动作维度是 6，就是6个动作的均值
         self.mu = torch.nn.Linear(out_size, actions_num)
-        # sigma 是标准差，控制探索强度，大探索强，可被优化，网络能自己学“探索应该多大”
+        # 初始化，sigma 是标准差，可被优化，网络能自己学“探索应该多大”
         self.sigma = nn.Parameter(
             torch.zeros(actions_num, requires_grad=True, dtype=torch.float32), requires_grad=True)#requires_grad=True这个参数要参与梯度计算，并在训练中被优化器更新。
 
@@ -90,7 +90,7 @@ class ActorCritic(nn.Module):
         torch.save(self.actor_mlp.state_dict(), actor_mlp_path)
         torch.save(self.mu.state_dict(), actor_head_path)
 
-    # 训练采样阶段使用，根据环境采样，返回结果，只做前向推理，不记录梯度
+    #11111111111 训练采样阶段使用，根据环境采样，返回结果，只做前向推理，不记录梯度
     @torch.no_grad()
     def act(self, obs_dict):
         # 根据当前观测构造正态分布，然后“采样”一个动作
@@ -118,6 +118,7 @@ class ActorCritic(nn.Module):
         mu, logstd, value = self._actor_critic(obs_dict)
         return mu
 
+    #！！！22222222222 核心函数：输入观测 obs，输出动作分布参数 mu、logstd 和状态价值 value
     def _actor_critic(self, obs_dict):
         # 输入观测 obs，输出动作均值 mu、对数标准差 logstd、状态价值 value
         obs = obs_dict['obs']
@@ -135,7 +136,7 @@ class ActorCritic(nn.Module):
         # mu * 0 + sigma：把一维 sigma 广播成和 mu 同 batch 形状的张量
         return mu, mu * 0 + sigma, value
 
-    #多次利用采样，对一批旧样本多次PPO，重新计算当前策略下的动作概率
+    #3333333333多次利用采样，对一批旧样本多次PPO，重新计算当前策略下的动作概率
     def forward(self, input_dict):
         # 训练阶段使用：
         # 给定“prev_actions”和当前观测，重新计算这些动作在新策略下的概率

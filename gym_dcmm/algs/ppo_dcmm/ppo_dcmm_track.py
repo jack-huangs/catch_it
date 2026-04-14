@@ -182,10 +182,10 @@ class PPO_Track(object):
     # 切换模型到训练模式（在优化网络时使用）
     def set_train(self):
         self.model.train()
-        if self.normalize_input:
-            self.running_mean_std.train()
+        if self.normalize_input:#normalize_input 是否对输入进行标准化
+            self.running_mean_std.train()#观测标准化器进入训练模式
         if self.normalize_value:
-            self.value_mean_std.train()
+            self.value_mean_std.train()#value / return标准化器进入训练模式
 
     # 主训练循环：
     # - 反复调用 train_epoch() 进行 PPO 更新
@@ -329,38 +329,40 @@ class PPO_Track(object):
         self.data_collect_time += (time.time() - _t)
         # update network
         _t = time.time()
-        # 切回训练模式，开始真正的反向传播，现在不再和环境交互，开始用刚才收集的数据更新网络参数
+        # 22222222切回训练模式，现在不再和环境交互，开始用刚才收集的数据更新网络参数
         self.set_train()
         a_losses, b_losses, c_losses = [], [], []
-        entropies, kls = [], []
-        # 2222222222. 同一批数据会被反复训练 mini_epochs_num 轮
+        entropies, kls = [], [] #策略熵，新旧策略差异
+        # 333333333. 开始训练   同一批数据会被反复训练 mini_epochs_num 轮
         for mini_ep in range(0, self.mini_epochs_num):
             ep_kls = []
             # storage 已经把总样本切成多个 mini-batch，这里逐批训练
             for i in range(len(self.storage)):
                 value_preds, old_action_log_probs, advantage, old_mu, old_sigma, \
-                    returns, actions, obs = self.storage[i]
+                    returns, actions, obs = self.storage[i] #从经验池里取一个 mini-batch
 
-                # 训练前先对观测做标准化
+                # 训练前先对标准化观测
                 obs = self.running_mean_std(obs)
                 batch_dict = {
                     'prev_actions': actions,
                     'obs': obs,
                 }
-                res_dict = self.model(batch_dict)
-                action_log_probs = res_dict['prev_neglogp']
-                values = res_dict['values']
-                entropy = res_dict['entropy']
-                mu = res_dict['mus']
+                #444444444!!!!!!!旧动作和旧观测送进当前网络，用当前的新网络（第二minibatch开始），重新评估“旧动作在当前策略下的概率和值”
+                res_dict = self.model(batch_dict)# 走的是ActorCritic里的 forward()，
+                action_log_probs = res_dict['prev_neglogp']# 当前策略下旧动作的负对数概率
+                values = res_dict['values'] # 当前 critic 输出
+                entropy = res_dict['entropy'] # 当前策略的熵，当前策略的随机性
+                mu = res_dict['mus'] #当前策略分布参数
                 sigma = res_dict['sigmas']
 
+                #55555555555算 PPO loss：
                 # actor loss：希望高优势动作概率变大，同时限制新旧策略差异不要太大
-                ratio = torch.exp(old_action_log_probs - action_log_probs)
+                ratio = torch.exp(old_action_log_probs - action_log_probs)#当前新策略相对于旧策略，对同一个动作的概率比值
                 surr1 = advantage * ratio
                 surr2 = advantage * torch.clamp(ratio, 1.0 - self.e_clip, 1.0 + self.e_clip)
                 a_loss = torch.max(-surr1, -surr2)
                 # critic loss：让 critic 预测的 value 接近 return
-                if self.clip_value_loss:
+                if self.clip_value_loss:#如果开了 clip_value_loss，就也对 value 更新做一个 PPO 风格的裁剪，避免 critic 变动过大
                     value_pred_clipped = value_preds + \
                         (values - value_preds).clamp(-self.e_clip, self.e_clip)
                     value_losses = (values - returns) ** 2
@@ -376,23 +378,27 @@ class PPO_Track(object):
                     b_loss = (mu_loss_low + mu_loss_high).sum(axis=-1)
                 else:
                     b_loss = 0
+
+                #把各项 loss 取平均，因为前面这些量是对一个 mini-batch 每个样本分别算的
                 a_loss, c_loss, entropy, b_loss = [
                     torch.mean(loss) for loss in [a_loss, c_loss, entropy, b_loss]]
 
                 loss = a_loss + 0.5 * c_loss * self.critic_coef - entropy * self.entropy_coef \
                     + b_loss * self.bounds_loss_coef
-
-                self.optimizer.zero_grad()
-                loss.backward(retain_graph=True)
+                
+                # 66666666666 反向传播更新网络参数
+                self.optimizer.zero_grad()#先清空旧梯度
+                loss.backward(retain_graph=True)#再对当前 loss 做反向传播
 
                 # 梯度裁剪，防止训练不稳定
                 if self.truncate_grads:
                     torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_norm)
-                self.optimizer.step()
+                self.optimizer.step()#66666666 真正更新网络参数
 
+                #看当前新策略和旧策略差了多少
                 with torch.no_grad():
                     kl_dist = policy_kl(mu.detach(), sigma.detach(), old_mu, old_sigma)
-
+                #记录
                 kl = kl_dist
                 a_losses.append(a_loss)
                 c_losses.append(c_loss)
@@ -403,9 +409,10 @@ class PPO_Track(object):
 
                 self.storage.update_mu_sigma(mu.detach(), sigma.detach())
 
+            #一轮 mini-epoch 结束后，算平均 KL
             av_kls = torch.mean(torch.stack(ep_kls))
             kls.append(av_kls)
-
+            #7777777777  更改学习率
             if self.lr_schedule == 'kl':
                 self.last_lr = self.scheduler.update(self.last_lr, av_kls.item())
             elif self.lr_schedule == 'cos':
@@ -506,11 +513,11 @@ class PPO_Track(object):
                 shaped_rewards += self.gamma * res_dict['values'] * infos['time_outs'].unsqueeze(1).float()
             self.storage.update_data('rewards', n, shaped_rewards)
 
-            # 444444.下面是在做按 episode 的累计统计，用于日志展示
-            self.current_rewards += rewards
+            # 444444.下面是在做按 episode 的rewards，lengths，success累计统计
+            self.current_rewards += rewards #这个episode的累计奖励
             self.current_lengths += 1
-            done_indices = self.dones.nonzero(as_tuple=False)
-            self.episode_rewards.update(self.current_rewards[done_indices])
+            done_indices = self.dones.nonzero(as_tuple=False)#找到结束的episode
+            self.episode_rewards.update(self.current_rewards[done_indices])#把结束的episode的整个reward记录下来
             self.episode_lengths.update(self.current_lengths[done_indices])
             self.episode_success.update(torch.tensor(truncates, dtype=torch.float32, device=self.device)[done_indices])
             assert isinstance(infos, dict), 'Info Should be a Dict'
@@ -521,7 +528,7 @@ class PPO_Track(object):
 
             not_dones = 1.0 - self.dones.float()
 
-            self.current_rewards = self.current_rewards * not_dones.unsqueeze(1)
+            self.current_rewards = self.current_rewards * not_dones.unsqueeze(1)#把已结束环境的累计步数清零
             self.current_lengths = self.current_lengths * not_dones
 
         # 轨迹采完后，再估计一下最后一个状态的 value，用来算 GAE / return

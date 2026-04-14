@@ -118,20 +118,20 @@ class ExperienceBuffer(Dataset):
         last_gae_lam = 0
         mb_advs = torch.zeros_like(self.storage_dict['rewards'])
         for t in reversed(range(self.transitions_per_env)):
-            # 最后一个时间步的 next_value 取 rollout 结束后额外估计的 last_values
+            # 最后一个时间步的 next_value拿结束后额外估计的 last_values
             if t == self.transitions_per_env - 1:
-                next_values = last_values
+                next_values = last_values #一般走这
             else:
                 next_values = self.storage_dict['values'][t + 1]
             # 如果这一时刻 done=True，后面就不能再 bootstrap
             next_nonterminal = 1.0 - self.storage_dict['dones'].float()[t]
             next_nonterminal = next_nonterminal.unsqueeze(1)
-            # TD 误差 delta = r + gamma * V(s') - V(s)
+            #1111111111.TD 误差 delta = r + gamma * V(s') - V(s)
             delta = self.storage_dict['rewards'][t] + \
                 gamma * next_values * next_nonterminal - self.storage_dict['values'][t]
-            # GAE 递推公式
+            # 222222222.GAE 递推公式
             mb_advs[t] = last_gae_lam = delta + gamma * tau * next_nonterminal * last_gae_lam #因为是逆序所以是 last_gae_lam 也就是顺序的下一个时间步的 advantage
-            # return = advantage + value
+            # 33333333 return = advantage + value
             self.storage_dict['returns'][t, :] = mb_advs[t] + self.storage_dict['values'][t]
 
     def prepare_training(self):

@@ -822,3 +822,22 @@ return_t = A_t + V(s_t)
 如果你要，我下一条可以继续做一件最有帮助的事：
 
 **用一个 3 步的具体数字例子，把 `delta -> advantage -> return` 手算一遍。**
+
+Hydra：配置管理工具
+wandb：训练日志记录和可视化工具
+
+在你这段代码里：
+
+```python
+assert isinstance(infos, dict), 'Info Should be a Dict'
+```
+
+意思是：
+
+- `isinstance(infos, dict)`：检查 `infos` 是不是 `dict` 类型
+- `assert 条件, 错误信息`：断言这个条件必须为真
+- 如果条件为 `False`，程序就报 `AssertionError`，并显示后面的错误信息
+
+所以这一行可以理解成：
+
+**“我要求 `infos` 必须是字典，否则这里直接报错。”**

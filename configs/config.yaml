@@ -8,14 +8,14 @@ torch_deterministic: False
 # 强化学习模型运行在哪个设备上；通常由训练脚本进一步解析
 rl_device: ???
 device_id: 0 # GPU 编号；如 cuda:0。设为 -1 表示使用 CPU
-	
+
 # 是否打开 MuJoCo 可视化窗口 / 相机图像显示
 viewer: False
 imshow_cam: False
 # 强化学习运行模式
 test: False # False 表示训练；True 表示测试/推理
 task: Tracking # 任务类型：Tracking / Catching_TwoStage / Catching_OneStage
-num_envs: 4 # 并行环境数量；一般不要超过 CPU 核数的 1~2 倍
+num_envs: 8 # 并行环境数量；一般不要超过 CPU 核数的 1~2 倍
 object_eval: False # 是否使用“未见过的物体”做评估
 
 # checkpoint 路径：可用于继续训练或加载已有模型测试
@@ -23,10 +23,10 @@ checkpoint_tracking: ""
 checkpoint_catching: ""
 # checkpoint_tracking: 'assets/models/track.pth'
 # checkpoint_catching: 'assets/models/catch_two_stage.pth'
-	
+
 # wandb 日志配置
-output_name: Dcmm_Quick  # 这次实验输出目录的名字
-wandb_mode: "disabled" # "online" 在线上传；"offline" 本地缓存；"disabled" 完全关闭
+output_name: Dcmm_Quick # 这次实验输出目录的名字
+wandb_mode: "offline" # "online" 在线上传；"offline" 本地缓存；"disabled" 完全关闭
 wandb_entity: "Your_username" # 你的 wandb 用户名 / 组织名
 # wandb_project: 'RL_Dcmm_Track_Random'
 wandb_project: "RL_Dcmm_Catch_Random" # wandb 项目名

@@ -640,8 +640,6 @@ class DcmmVecEnv(gym.Env):
         self.Dcmm.model.opt.gravity[2] = -9.81 + 0.5*np.random.uniform(-1, 1)
         # Random PID
         self.random_PID()
-        # Random Delay
-        self.random_delay()
         # Forward Kinematics
         mujoco.mj_forward(self.Dcmm.model, self.Dcmm.data)
         mujoco.mj_forward(self.Dcmm.model_arm, self.Dcmm.data_arm)
@@ -880,14 +878,17 @@ class DcmmVecEnv(gym.Env):
             if self.step_touch == False:
                 if self.task == "Catching" and np.any(mask_hand):
                     self.step_touch = True
-                elif self.task == "Tracking" and np.any(mask_palm):
+                # Tracking 原来只有手掌接触才算成功；
+                # 这里放宽条件：手掌或手指接触都算成功
+                elif self.task == "Tracking" and (np.any(mask_palm) or np.any(mask_finger)):
                     self.step_touch = True
             # 根据错误接触判断是否提前失败结束
             if not self.terminated:
                 if self.task == "Catching":
                     self.terminated = np.any(mask_coll)
                 elif self.task == "Tracking":
-                    self.terminated = np.any(mask_coll) or np.any(mask_finger)
+                    # Tracking 放宽后，finger 不再算失败，只有真正错误碰撞才算失败
+                    self.terminated = np.any(mask_coll)
             # 一旦失败，本步后面的 MuJoCo 小步就不用再跑了
             if self.terminated:
                 break
