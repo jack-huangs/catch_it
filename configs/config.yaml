@@ -19,7 +19,7 @@ num_envs: 8 # 并行环境数量；一般不要超过 CPU 核数的 1~2 倍
 object_eval: False # 是否使用“未见过的物体”做评估
 
 # checkpoint 路径：可用于继续训练或加载已有模型测试
-checkpoint_tracking: ""
+checkpoint_tracking: "outputs/Dcmm_Quick/2026-04-15/09:28:02/nn/best_reward_62.06.pth"
 checkpoint_catching: ""
 # checkpoint_tracking: 'assets/models/track.pth'
 # checkpoint_catching: 'assets/models/catch_two_stage.pth'

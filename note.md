@@ -1,843 +1,484 @@
-你现在可以这样记住整个项目
+# catch_it 笔记
 
-一句话版：
+## 1. 项目一句话
 
-这是一个基于 MuJoCo 的机器人强化学习项目，环境负责随机抛物体并计算奖励，策略负责输出高层动作，IK 和 PID 把动作变成底层控制，PPO 根据轨迹奖励不断更新策略，最终让机器人先学追踪、再学接住。
+这是一个基于 MuJoCo 的机器人强化学习项目。  
+环境负责抛出 `object`、推进物理仿真并计算奖励；策略网络负责根据观测输出动作；PPO 根据采样轨迹不断更新策略，让机器人学会完成任务。
 
-你应该怎么读这个项目
+我当前只关注：
 
-如果你想真的读懂，我建议按这个顺序读，不容易乱：
+- `Tracking`
+- 新机器人模型：`tidybot`
+- 目标：让夹爪末端接近并碰到 `object`
 
-先看 README.md
-先知道项目目标、三种任务、怎么运行。
-再看 train_DCMM.py
-先搞清楚入口和主流程。
-再看 config.yaml 和 DcmmPPO.yaml
-知道任务和超参怎么配。
-再看 DcmmVecEnv.py
-重点看 reset()、step()、\_get_obs()、compute_reward()。
-再看 MujocoDcmm.py
-理解 IK、PID、动作如何落到机器人。
-再看 ppo_dcmm_track.py
-理解训练怎么跑。
-最后看 models_track.py 和 experience.py
-理解网络和 buffer。
+---
 
-核心文件是 ppo_dcmm_track.py。
+## 2. 当前任务设定
 
-它的训练循环是：
+### 当前只做 Tracking
 
-env.reset() 得到初始观测
-网络根据观测采样动作
-env.step(action) 得到下一步观测、奖励、done
-把这一批轨迹存到 buffer
-一段时间后，用这些数据更新策略网络
+- 不做 `Catching`
+- 使用 `tidybot`：移动底盘 + 7 关节机械臂 + 夹爪
+- 保留原来的 `object` 抛掷任务
+- 目标是让夹爪末端接近并碰到 `object`
+
+### 当前成功判定
+
+Tracking 成功满足任意一个条件即可：
+
+1. `object` 真实接触到夹爪 pad geom
+2. `ee_distance < 0.08`
+
+解释：
+
+- `ee_distance`：夹爪末端到物体的距离
+- 现在把“足够接近”也算成功，是为了降低学习难度
+
+---
+
+## 3. 推荐阅读顺序
+
+如果想把项目主线读懂，按这个顺序看：
+
+1. `README.md`
+2. `train_DCMM.py`
+3. `configs/config.yaml`
+4. `configs/train/DcmmPPO.yaml`
+5. `configs/env/DcmmCfg.py`
+6. `gym_dcmm/envs/DcmmVecEnv.py`
+7. `gym_dcmm/agents/MujocoDcmm.py`
+8. `gym_dcmm/algs/ppo_dcmm/ppo_dcmm_track.py`
+9. `gym_dcmm/algs/ppo_dcmm/models_track.py`
+10. `gym_dcmm/algs/ppo_dcmm/experience.py`
+
+---
+
+## 4. 项目主流程
+
+### 入口
+
+训练入口在 `train_DCMM.py`。
+
+主线是：
+
+1. 读取配置
+2. 创建环境 `env`
+3. 实例化 `PPO_Track`
+4. 调 `agent.train()`
+
+### 训练总流程
+
+```text
+env.reset()
+  ->
+得到初始观测 obs
+  ->
+策略网络根据 obs 产生动作
+  ->
+env.step(action)
+  ->
+得到 next_obs / reward / done
+  ->
+把一段轨迹存进 buffer
+  ->
+用 PPO 更新 actor-critic 网络
+  ->
 重复很多轮
-里面最关键的几个函数是：
-
-train()：总训练循环
-play_steps()：和环境交互，采样数据
-train_epoch()：用 PPO 损失更新网络
-obs2tensor()：把环境观测拼成神经网络输入
-action2dict()：把网络动作还原成环境动作格式
-神经网络本体在 models_track.py。
-
-它其实是一个很标准的 actor-critic：
-
-actor 输出动作分布
-critic 输出价值估计
-经验缓存区在 experience.py，用来存一段轨迹并计算 return / advantage。
-
-所以 PPO 在这个项目里的职责只有一句话：
-
-让“哪些动作更容易拿高分”逐步固化成策略网络参数。
-
-奖励在 DcmmVecEnv.py 的 compute_reward() 里。
-
-它不是只给“接住了 +1，没接住 0”这么简单，而是拆成很多部分：
-
-离物体更近有奖励
-姿态更对有奖励
-触碰到物体有奖励
-稳定抓住有奖励
-控制动作太大有惩罚
-机械臂越界有惩罚
-底盘碰撞有惩罚
-
-4. 策略输出的动作是什么
-   对 Tracking 来说，动作本质上是 6 维左右：
-
-[train_DCMM.py main()]
-|
-v
-[创建环境 env]
-|
-v
-[实例化 PPO_Track]
-|
-v
-[PPO_Track.train()]
-|
-|-- env.reset()
-|-- obs2tensor()
-|
-v
-+-----------------------------+
-| while agent*steps < max: |
-+-----------------------------+
-|
-v
-[train_epoch()]
-|
-|---- 采样阶段 --------------------------------------|
-| |
-| set_eval() |
-| |
-| play_steps() |
-| | |
-| |-- for n in horizon_length: |
-| | | |
-| | |-- model_act(obs) |
-| | | | |
-| | | |-- running_mean_std(obs) |
-| | | |-- ActorCritic.act() |
-| | | |-- 得到 actions/value/logprob |
-| | | |
-| | |-- storage.update_data(obs/action...)|
-| | |-- action clamp |
-| | |-- action2dict() |
-| | |-- env.step(action_dict) |
-| | |-- 得到 obs,r,terminated,truncated |
-| | |-- obs2tensor(new_obs) |
-| | |-- storage.update_data(reward/done) |
-| | |-- 更新 episode 统计 |
-| | |
-| |-- model_act(last_obs) -> last_values |
-| |-- storage.compute_return() |
-| |-- storage.prepare_training() |
-| |
-|---- 更新阶段 --------------------------------------|
-| |
-| set_train() |
-| for mini_epoch in mini_epochs_num: |
-| for minibatch in storage: |
-| | |
-| |-- running_mean_std(obs) |
-| |-- model(batch_dict) |
-| |-- 算 actor loss |
-| |-- 算 critic loss |
-| |-- 算 bounded loss |
-| |-- 合成总 loss |
-| |-- backward() |
-| |-- clip_grad_norm*() |
-| |-- optimizer.step() |
-| |-- policy_kl() |
-| |-- scheduler.update() |
-| |
-v
-[返回 losses / entropies / kls]
-|
-v
-[train() 记录日志]
-|
-|-- write_stats()
-|-- 记录平均 reward/length/success
-|-- 保存 last 模型
-|-- 如更优则保存 best 模型
-|
-v
-[下一轮 while]
-|
-v
-[达到 max_agent_steps 后结束]
-
-可以，下面是这个项目里你会经常看到的缩写表。
-
-| 缩写                | 全称                             | 中文意思                  |
-| ------------------- | -------------------------------- | ------------------------- |
-| `obs`               | observation                      | 观测                      |
-| `act`               | action                           | 动作                      |
-| `env`               | environment                      | 环境                      |
-| `ppo`               | Proximal Policy Optimization     | PPO 强化学习算法          |
-| `rl`                | reinforcement learning           | 强化学习                  |
-| `ee`                | end effector                     | 末端执行器                |
-| `pos`               | position                         | 位置                      |
-| `quat`              | quaternion                       | 四元数                    |
-| `v`                 | velocity                         | 速度                      |
-| `lin`               | linear                           | 线性                      |
-| `ang`               | angular                          | 角度 / 角速度相关         |
-| `2d`                | two-dimensional                  | 二维                      |
-| `3d`                | three-dimensional                | 三维                      |
-| `v_lin_2d`          | 2D linear velocity               | 二维线速度                |
-| `v_lin_3d`          | 3D linear velocity               | 三维线速度                |
-| `ee_pos3d`          | end-effector 3D position         | 末端三维位置              |
-| `ee_quat`           | end-effector quaternion          | 末端姿态四元数            |
-| `ee_v_lin_3d`       | end-effector 3D linear velocity  | 末端三维线速度            |
-| `joint_pos`         | joint position                   | 关节位置 / 关节角         |
-| `ctrl`              | control                          | 控制量                    |
-| `info`              | information                      | 附加信息                  |
-| `done`              | done                             | 回合结束                  |
-| `terminated`        | terminated                       | 失败结束                  |
-| `truncated`         | truncated                        | 正常截断结束              |
-| `reward`            | reward                           | 奖励                      |
-| `base`              | mobile base                      | 移动底盘                  |
-| `arm`               | robotic arm                      | 机械臂                    |
-| `hand`              | dexterous hand                   | 灵巧手                    |
-| `obj` / `object`    | object                           | 目标物体                  |
-| `mu`                | mean                             | 均值                      |
-| `sigma`             | standard deviation               | 标准差                    |
-| `value`             | state value                      | 状态价值                  |
-| `adv` / `advantage` | advantage                        | 优势函数                  |
-| `return`            | return                           | 回报                      |
-| `kl`                | Kullback-Leibler divergence      | KL散度                    |
-| `lr`                | learning rate                    | 学习率                    |
-| `fps`               | frames per second                | 这里更接近“处理速度/步频” |
-| `ik`                | inverse kinematics               | 逆运动学                  |
-| `pid`               | proportional-integral-derivative | PID 控制                  |
-| `qpos`              | joint position in MuJoCo         | MuJoCo 中的广义位置       |
-| `qvel`              | joint velocity in MuJoCo         | MuJoCo 中的广义速度       |
-
-**你现在最该记住的几个**
-先记这几个就够用：
-
-- `ee`：末端执行器
-- `quat`：四元数姿态
-- `v_lin_2d`：二维线速度
-- `v_lin_3d`：三维线速度
-- `joint_pos`：关节角
-- `mu/sigma`：动作分布参数
-- `value`：critic 输出的状态价值
-- `advantage`：优势
-- `ctrl`：底层控制量
-
-如果你要，我下一步可以继续给你列：
-**这个项目里和 MuJoCo 相关的常见变量表**，比如 `qpos`、`qvel`、`xpos`、`xquat`、`cvel`。
-
-底盘和手臂怎么被控制
-在 MujocoDcmm.py (line 104) 之后：
-
-底盘有 drive_pid 和 steer_pid
-手臂有 arm_pid
-手有 hand_pid
-另外还有：
-
-ik_arm
-用逆运动学把末端位姿目标转成关节目标
-所以控制链是：
-PPO 动作
--> 底盘速度目标 / 末端位姿增量 / 手关节增量
--> IK + PID
--> MuJoCo底层控制量
--> 机器人运动
-
-为什么arm的动作空间是4维的，不时有6个关节吗？
-机器人物理上确实有 6 个关节
-但策略网络不直接输出 6 个关节命令
-它只输出 4 个高层动作
-这 4 个动作本质上是 dx, dy, dz 加上 1 个姿态自由度
-剩下的关节变化由 IK 自动求解出来
-
-PPO 负责“想去哪”
-PID 负责“怎么稳定地去” 4. P 是什么
-P 看“现在差多少”。
-差得越大，推得越用力
-差得越小，推得越轻
-所以 P 像是：
-看到偏差就立刻纠正5. I 是什么
-I 看“过去一直差了多少”。
-如果系统总是差一点点，P 可能纠不干净。
-I 会把这种长期小误差积累起来，慢慢补掉。
-所以 I 像是：
-专门消除长期偏差6. D 是什么
-D 看“误差变化得有多快”。
-如果目标快到了，但速度太猛，可能会冲过头。
-D 会起到“刹车、阻尼”的作用。
-所以 D 像是：
-防止冲过头，让动作更稳
-
-机械臂 PID 是怎么配合 IK 的？
-然后 IK 把这个目标变成：
-每个关节应该到什么角度
-接着 arm_pid 再负责：
-让真实关节角尽量跟上这个目标关节角
-PPO -> 末端目标
--> IK -> 目标关节角
--> arm_pid -> 底层控制量
-
-你指出的 [DcmmVecEnv.py#L684](/home/jack/桌面/catch_it/gym_dcmm/envs/DcmmVecEnv.py#L684) 这一段，**严格说不是损失函数 loss，而是奖励函数 reward**。
-
-先带你学这个奖励函数。  
-如果你后面要，我再继续带你学 PPO 里的 `actor loss / critic loss / entropy`。
-
-**1. 记号**
-设：
-
-- \(d^{ee}\_t\)：当前时刻末端到物体的距离
-- \(d^{ee}\_{t-1}\)：上一时刻末端到物体的距离
-- \(d^{base}\_t\)：当前时刻机械臂基座到物体的平面距离
-- \(d^{base}\_{t-1}\)：上一时刻机械臂基座到物体的平面距离
-
----
-
-**2. 各个奖励项**
-
-在 [compute_reward](/home/jack/桌面/catch_it/gym_dcmm/envs/DcmmVecEnv.py#L668) 里，主要有这些项。
-
-**(1) 底座接近奖励**
-
-```python
-reward_base_pos = (self.info["base_distance"] - info["base_distance"]) * ...
 ```
 
-数学式：
+### PPO_Track 里最重要的函数
 
-\[
-r*{base} = (d^{base}*{t-1} - d^{base}_{t}) \cdot w_{base}
-\]
-
-含义：
-
-- 如果这一时刻比上一时刻更靠近物体，就为正
-- 这里配置里 `w_base=0`，所以当前实际不起作用
+- `train()`：总训练循环
+- `train_epoch()`：一轮 PPO 训练
+- `play_steps()`：与环境交互、采样轨迹
+- `obs2tensor()`：把环境观测拼成神经网络输入
+- `action2dict()`：把网络动作还原成环境动作格式
 
 ---
 
-**(2) 末端接近奖励**
+## 5. 当前 tidybot Tracking 的观测与动作
 
-```python
-reward_ee_pos = (self.info["ee_distance"] - info["ee_distance"]) * ...
+### Tracking 观测维度
+
+- `obs_dim = 25`
+
+### Tracking 动作维度
+
+- `act_dim = 9`
+
+### 动作组成
+
+- `base(2)`：底盘平面动作
+- `arm(7)`：7 个关节增量
+
+### 观测组成
+
+- `base.v_lin_2d`
+- `arm.ee_pos3d`
+- `arm.ee_quat`
+- `arm.ee_v_lin_3d`
+- `arm.joint_pos(7维)`
+- `object.pos3d`
+- `object.v_lin_3d`
+
+---
+
+## 6. 控制链
+
+当前 tidybot Tracking 的控制链是：
+
+```text
+PPO 输出动作
+  ->
+base(2) + arm(7)
+  ->
+环境把动作转换成目标控制量
+  ->
+MuJoCo 执行 ctrl
+  ->
+机器人运动
+  ->
+环境读取新状态并计算 reward
 ```
 
-数学式：
+### 和旧版本的区别
 
-\[
-r*{ee} = (d^{ee}*{t-1} - d^{ee}_{t}) \cdot w_{ee}
-\]
+旧机器人更依赖 `IK + PID`。  
+现在 tidybot Tracking 先采用更直接的关节空间控制思路：
 
-含义：
-
-- 末端比上一时刻更接近物体，就奖励
+- 底盘：目标平面位姿/速度控制
+- 手臂：7 个关节增量控制
+- 夹爪：Tracking 中先不作为主要学习目标
 
 ---
 
-**(3) 精确接近奖励**
+## 7. PPO 训练流程
 
-```python
-reward_ee_precision = math.exp(-50*info["ee_distance"]**2) * ...
+### 一轮训练的两个阶段
+
+PPO 一轮分成两段：
+
+1. 采样阶段
+2. 更新阶段
+
+### 采样阶段
+
+```text
+set_eval()
+  ->
+play_steps()
+  ->
+用当前策略和环境交互 horizon_length 步
+  ->
+存 obs / action / reward / done / value / logprob
 ```
 
-数学式：
+### 更新阶段
 
-\[
-r*{precision} = e^{-50(d^{ee}\_t)^2} \cdot w*{precision}
-\]
-
-含义：
-
-- 只有当末端非常接近物体时，这项才会大
-- 距离远时几乎接近 0
-
----
-
-**(4) 碰撞惩罚**
-
-```python
-if self.contacts['base_contacts'].size != 0:
-    reward_collision = w_{collision}
+```text
+set_train()
+  ->
+从 storage 里按 mini-batch 取数据
+  ->
+forward() 重新评估旧动作
+  ->
+计算 actor loss / critic loss / entropy / kl
+  ->
+backward()
+  ->
+optimizer.step()
 ```
 
-数学式：
+### act 和 forward 的区别
 
-\[
-r*{collision} =
-\begin{cases}
-w*{collision}, & \text{发生碰撞}\\
-0, & \text{否则}
-\end{cases}
-\]
+- `act()`：采样时用，负责真正产生动作
+- `forward()`：训练时用，负责重新评估旧动作在当前策略下的概率和值
 
-这里 `w_collision = -10`
+一句话：
+
+- `act()` 是“产生动作”
+- `forward()` 是“评估旧动作”
 
 ---
 
-**(5) 约束惩罚**
+## 8. Actor-Critic 的理解
 
-```python
-reward_constraint = 0 if self.arm_limit else -1
-reward_constraint *= ...
-```
+### Actor
 
-数学式：
+作用：输出动作分布参数。
+
+- `mu`：动作均值
+- `sigma`：动作标准差
+
+训练时从高斯分布里采样动作：
 
 \[
-r*{constraint} =
-\begin{cases}
-0, & \text{机械臂解算正常}\\
--1 \cdot w*{constraint}, & \text{越界/IK失败}
-\end{cases}
+a_i \sim \mathcal{N}(\mu_i, \sigma_i)
 \]
+
+### Critic
+
+作用：输出当前状态价值：
+
+\[
+V(s)
+\]
+
+它不是直接出动作，而是估计“当前状态未来大概值多少钱”。
 
 ---
 
-**(6) 接触奖励**
+## 9. reward、return、episode_reward 的区别
 
-```python
-if self.step_touch:
-    self.reward_touch = reward_weights["r_touch"][self.task]
-else:
-    self.reward_touch = 0
-```
+### reward
 
-数学式：
+环境每一步立刻给的奖励。
 
 \[
-r*{touch} =
-\begin{cases}
-w*{touch}, & \text{本步成功接触物体}\\
-0, & \text{否则}
-\end{cases}
+r_t
 \]
 
-Tracking 下这里通常是：
+### episode_reward
+
+一整局 episode 所有 reward 的总和。
 
 \[
-w\_{touch}=5
+episode\_reward = r_0 + r_1 + r_2 + \cdots + r_T
 \]
+
+它主要用于：
+
+- 看训练效果
+- 画 reward 曲线
+
+### return
+
+从某一步开始往后的累计回报目标。  
+每一步都有一个 `return_t`。
+
+它主要用于：
+
+- 训练 critic
+- 计算 advantage
+
+### 关系
+
+- `episode_reward`：整局只有一个
+- `return`：每一步都有一个
+- `return_0` 往往最接近整局总 reward
 
 ---
 
-**(7) 姿态奖励**
-Tracking 里：
+## 10. GAE 的理解
 
-```python
-reward_orient = abs(cos_angle_between_vectors(...)) * ...
-```
+### 为什么要有 GAE
 
-数学式可以写成：
+PPO 不直接只看即时 reward，而要估计：
+
+- 这一步动作是不是比预期更好
+
+### 关键公式
+
+先算 TD 误差：
 
 \[
-r*{orient} = |\cos(\theta)| \cdot w*{orient}
+\delta_t = r_t + \gamma V(s_{t+1}) - V(s_t)
 \]
 
-其中 \(\theta\) 是：
-
-- 物体速度方向
-- 末端手掌法向方向
-
-之间的夹角。
-
-含义：
-
-- 如果手掌朝向更适合迎接飞来的物体，就奖励更大
-
----
-
-**(8) 控制惩罚**
-Tracking 里：
-
-```python
-reward_ctrl = - self.norm_ctrl(ctrl, {"base", "arm"})
-```
-
-数学式可以写成：
+再用 GAE 递推 advantage：
 
 \[
-r\_{ctrl} = - \|u_t\|
+A_t = \delta_t + \gamma \lambda A_{t+1}
 \]
 
-更准确一点，这里的 \(u_t\) 是加权后的底盘和机械臂控制量拼接。
-
-含义：
-
-- 动作越大，惩罚越大
-- 鼓励控制平稳
-
----
-
-**3. Tracking 总奖励**
-
-在 [DcmmVecEnv.py#L754](/home/jack/桌面/catch_it/gym_dcmm/envs/DcmmVecEnv.py#L754) 附近，Tracking 的总奖励是：
-
-\[
-r*t =
-r*{base}
-
-- r\_{ee}
-- r\_{precision}
-- r\_{orient}
-- r\_{ctrl}
-- r\_{collision}
-- r\_{constraint}
-- r\_{touch}
-  \]
-
-因为当前配置里 `r_base_pos = 0`，所以实际更接近：
-
-\[
-r*t \approx
-r*{ee}
-
-- r\_{precision}
-- r\_{orient}
-- r\_{ctrl}
-- r\_{collision}
-- r\_{constraint}
-- r\_{touch}
-  \]
-
----
-
-**4. 这些奖励项各自的作用**
-
-- \(r\_{ee}\)：鼓励持续靠近目标
-- \(r\_{precision}\)：鼓励特别接近目标
-- \(r\_{orient}\)：鼓励手掌朝向正确
-- \(r\_{ctrl}\)：防止动作太猛
-- \(r\_{collision}\)：避免碰撞
-- \(r\_{constraint}\)：避免 IK/关节越界
-- \(r\_{touch}\)：鼓励最终触碰成功
-
----
-
-**5. 你要注意**
-这部分是**环境奖励函数**，不是 PPO 的 loss。
-
-如果你接下来想学“真正的损失函数”，那是 [ppo_dcmm_track.py#L357](/home/jack/桌面/catch_it/gym_dcmm/algs/ppo_dcmm/ppo_dcmm_track.py#L357) 里的：
-
-- actor loss
-- critic loss
-- bounded loss
-- 总 loss
-
-如果你愿意，我下一条就继续带你学 PPO 里的每个损失函数，并把数学表达式完整写出来。
-
-好，这里我给你讲“为什么这些公式会这么写”，不只背结论。
-
----
-
-# 1. 最原始目标：我们到底想算什么？
-
-在强化学习里，从第 \(t\) 步开始的真实回报是：
-
-\[
-G*t = r_t + \gamma r*{t+1} + \gamma^2 r\_{t+2} + \cdots
-\]
-
-这就是“未来总回报”。
-
-但是问题是：
-
-- 直接用它方差很大
-- 训练不稳定
-- 一条轨迹没走完时也不好算完整未来
-
-所以就引入 critic 的价值估计：
-
-\[
-V(s_t)
-\]
-
-它是对未来总回报的近似预测。
-
----
-
-# 2. 为什么会有 `delta`
-
-我们想知道：
-
-**这一步实际表现，比 critic 原来预期的好还是差？**
-
-critic 原来对当前状态的预期是：
-
-\[
-V(s_t)
-\]
-
-而“走了一步之后得到的更真实估计”可以写成：
-
-\[
-r*t + \gamma V(s*{t+1})
-\]
-
-为什么这样写？
-
-因为：
-
-- 当前这一步先拿到即时奖励 \(r_t\)
-- 后面未来的部分，用下一个状态的 value 近似：\(\gamma V(s\_{t+1})\)
-
-所以两者相减：
-
-\[
-\delta*t = r_t + \gamma V(s*{t+1}) - V(s_t)
-\]
-
-这就是 TD error。
-
----
-
-## 直观理解 `delta`
-
-- 如果 \(\delta_t > 0\)
-  说明这一步之后的结果比 critic 原来想的更好
-
-- 如果 \(\delta_t < 0\)
-  说明更差
-
-所以 `delta` 本质上是：
-
-**一步修正量**
-
----
-
-# 3. 为什么 advantage 不直接等于 `delta`
-
-如果直接令：
-
-\[
-A_t = \delta_t
-\]
-
-那只看了“当前一步”的好坏，没充分考虑后面几步。
-
-但如果直接用完整回报：
-
-\[
-A_t = G_t - V(s_t)
-\]
-
-又会方差太大。
-
-所以 GAE 想做折中：
-
-- 不只看一步
-- 也不完全用整条未来
-- 而是逐步往后看，并且逐渐衰减
-
----
-
-# 4. GAE 递推公式怎么来的
-
-GAE 的定义可以展开成：
-
-\[
-A*t^{GAE(\lambda)} =
-\delta_t + (\gamma\lambda)\delta*{t+1} + (\gamma\lambda)^2\delta\_{t+2} + \cdots
-\]
-
-意思是：
-
-- 当前步的 TD 误差权重最大
-- 后面的 TD 误差也算，但越往后权重越小
-
-这就是“未来信息衰减累加”。
-
-把这个式子改写一下：
-
-\[
-A*t = \delta_t + \gamma \lambda A*{t+1}
-\]
-
-为什么成立？
-
-因为：
-
-\[
-A*{t+1} =
-\delta*{t+1} + (\gamma\lambda)\delta*{t+2} + (\gamma\lambda)^2\delta*{t+3} + \cdots
-\]
-
-所以：
-
-\[
-\gamma\lambda A*{t+1}
-=
-(\gamma\lambda)\delta*{t+1}
-
-- (\gamma\lambda)^2\delta\_{t+2}
-- (\gamma\lambda)^3\delta\_{t+3}
-- \cdots
-  \]
-
-再加上前面的 \(\delta_t\)，就正好得到：
-
-\[
-A*t =
-\delta_t + (\gamma\lambda)\delta*{t+1} + (\gamma\lambda)^2\delta\_{t+2} + \cdots
-\]
-
-所以递推公式成立。
-
----
-
-# 5. 为什么代码里是 `tau`
-
-你代码里写的是：
-
-\[
-A*t = \delta_t + \gamma \tau A*{t+1}
-\]
-
-这里的 `tau` 实际上就扮演 GAE 里的 \(\lambda\) 角色。
-
-也就是：
-
-\[
-\tau \approx \lambda
-\]
-
-只是变量名不同。
-
----
-
-# 6. 为什么 `return = advantage + value`
-
-advantage 的定义本来就是：
-
-\[
-A_t = Q(s_t,a_t) - V(s_t)
-\]
-
-也就是：
-
-**动作价值 - 状态价值**
-
-移项一下：
-
-\[
-Q(s_t,a_t) = A_t + V(s_t)
-\]
-
-而在 PPO / actor-critic 里，通常把训练 critic 的目标写成 return，也就是：
-
-\[
-return_t \approx Q(s_t,a_t)
-\]
-
-所以自然得到：
+最后得到 return：
 
 \[
 return_t = A_t + V(s_t)
 \]
 
----
+### 一句话记忆
 
-## 直观理解
-
-- `value`
-  是 critic 原本对状态的估计
-
-- `advantage`
-  是“这一步动作让结果比原估计好/差了多少”
-
-所以：
-
-- 原估计 + 修正量 = 更好的目标值
-
-也就是：
-
-\[
-return = value + advantage
-\]
+- `delta`：当前一步比预期好多少
+- `advantage`：这个动作值不值得鼓励
+- `return`：critic 应该去逼近的目标
 
 ---
 
-# 7. 为什么不用直接 reward 累加，而要这样算
+## 11. 当前 reward 设计（tidybot Tracking）
 
-因为直接 Monte Carlo 回报：
+### 当前关键权重
 
-\[
-G*t = r_t + \gamma r*{t+1} + \cdots
-\]
+- `r_ee_pos = 15.0`
+- `r_precision = 20.0`
+- `r_close = 2.0`
+- `r_orient = 0.4`
+- `r_touch['Tracking'] = 0.0`
+- `r_collision = -10.0`
+- `r_constraint = 1.0`
 
-虽然直观，但有两个问题：
+### 当前 reward 逻辑
 
-- 方差大
-- 训练容易抖
+- 末端持续接近目标：奖励
+- 末端非常接近目标：更大奖励
+- 当 `ee_distance < 0.15` 时：给近距离额外奖励
+- 夹爪朝向和物体速度方向同向时：给较弱姿态奖励
+- 动作太大：惩罚
+- 碰撞：惩罚
+- 关节越界或不合理动作：惩罚
 
-而引入 `value` 做 bootstrap 后：
+### 当前设计思想
 
-\[
-r*t + \gamma V(s*{t+1})
-\]
+Tracking 现在不再依赖显式接触奖励 `r_touch`。  
+主要靠：
 
-会更平滑、更稳定。
+- 靠近目标
+- 进入近距离区域
+- 足够近直接判成功
 
-GAE 正是在：
-
-- “完全相信采样回报”
-- “完全相信 critic 估计”
-
-之间做平衡。
-
----
-
-# 8. 把整个推导串起来
-
-## 第一步：想估计未来总价值
-
-\[
-G*t = r_t + \gamma r*{t+1} + \gamma^2 r\_{t+2} + \cdots
-\]
-
-## 第二步：critic 给出状态价值估计
-
-\[
-V(s_t)
-\]
-
-## 第三步：构造一步 TD 误差
-
-\[
-\delta*t = r_t + \gamma V(s*{t+1}) - V(s_t)
-\]
-
-## 第四步：把未来多步 TD 误差衰减累加，得到 GAE advantage
-
-\[
-A*t = \delta_t + \gamma \lambda A*{t+1}
-\]
-
-## 第五步：由 advantage 还原 return
-
-\[
-return_t = A_t + V(s_t)
-\]
+来驱动学习。
 
 ---
 
-# 9. 一句话总结推导逻辑
+## 12. 当前 PPO 正式训练参数
 
-这些公式不是凭空来的，而是：
+### 环境与采样
 
-1. 先想求未来总回报
-2. 发现直接求方差太大
-3. 用 critic 的 \(V(s)\) 做近似
-4. 用一步 TD 误差 \(\delta_t\) 表示“当前比预期好多少”
-5. 再把未来的 \(\delta\) 衰减累加，得到 GAE advantage
-6. 最后再加回 \(V(s_t)\)，得到更稳定的 return
+- `num_envs = 8`
+- `horizon_length = 64`
+- `batch_size = 512`
+
+### 更新参数
+
+- `minibatch_size = 256`
+- `mini_epochs = 4`
+- `learning_rate = 5e-4`
+- `gamma = 0.99`
+- `tau = 0.95`
+- `entropy_coef = 0.001`
+- `max_agent_steps = 2000000`
+
+### 动作反归一化
+
+- `action_track_denorm = [1.5, 0.025, 0.01]`
+
+含义：
+
+- 底盘速度缩放：`1.5`
+- 7 关节增量缩放：`0.025`
+- 夹爪占位量缩放：`0.01`
 
 ---
 
-如果你要，我下一条可以继续做一件最有帮助的事：
+## 13. 曲线怎么理解
 
-**用一个 3 步的具体数字例子，把 `delta -> advantage -> return` 手算一遍。**
+### 1. `metrics/episode_rewards_per_step`
 
-Hydra：配置管理工具
-wandb：训练日志记录和可视化工具
+不是“每一步 reward”，而是：
 
-在你这段代码里：
+- 横轴：训练步数 `agent_steps`
+- 纵轴：最近若干个 episode 的平均总 reward
 
-```python
-assert isinstance(infos, dict), 'Info Should be a Dict'
-```
+### 2. `metrics/episode_lengths_per_step`
 
-意思是：
+表示最近 episode 的平均长度。
 
-- `isinstance(infos, dict)`：检查 `infos` 是不是 `dict` 类型
-- `assert 条件, 错误信息`：断言这个条件必须为真
-- 如果条件为 `False`，程序就报 `AssertionError`，并显示后面的错误信息
+### 3. `metrics/episode_success_per_step`
 
-所以这一行可以理解成：
+这是最重要的，最接近“成功率”。
 
-**“我要求 `infos` 必须是字典，否则这里直接报错。”**
+它表示：
+
+- 最近结束的那些 episode 里
+- 成功的比例
+
+例如：
+
+- `0.2` = 20% 成功率
+- `0.8` = 80% 成功率
+
+### 当前判断训练效果时的优先级
+
+1. `episode_success_per_step`
+2. `episode_rewards_per_step`
+3. `episode_lengths_per_step`
+
+---
+
+## 14. 训练时间预估
+
+当前参数下：
+
+- `num_envs = 8`
+- `max_agent_steps = 2000000`
+
+训练时间大约：
+
+- **2.5 ~ 4 小时**
+
+影响时长的主要因素：
+
+- MuJoCo 仿真
+- 并行环境数量
+- CPU 占用
+- 是否同时开很多程序
+
+注意：
+
+- reward 设计项多一两项，通常不会显著影响总训练时间
+- 但会显著影响学得快不快、效果好不好
+
+---
+
+## 15. 常见缩写表
+
+| 缩写 | 中文意思 |
+| --- | --- |
+| `obs` | 观测 |
+| `act` | 动作 |
+| `env` | 环境 |
+| `ppo` | PPO 强化学习算法 |
+| `rl` | 强化学习 |
+| `ee` | 末端执行器 |
+| `pos` | 位置 |
+| `quat` | 四元数 |
+| `v` | 速度 |
+| `lin` | 线性 |
+| `2d` | 二维 |
+| `3d` | 三维 |
+| `v_lin_2d` | 二维线速度 |
+| `v_lin_3d` | 三维线速度 |
+| `ee_pos3d` | 末端三维位置 |
+| `ee_quat` | 末端姿态四元数 |
+| `ee_v_lin_3d` | 末端三维线速度 |
+| `joint_pos` | 关节位置/关节角 |
+| `ctrl` | 控制量 |
+| `done` | 回合结束 |
+| `terminated` | 失败结束 |
+| `truncated` | 正常截断结束 |
+| `mu` | 均值 |
+| `sigma` | 标准差 |
+| `value` | 状态价值 |
+| `advantage` | 优势函数 |
+| `return` | 回报 |
+| `kl` | KL 散度 |
+| `lr` | 学习率 |
+| `ik` | 逆运动学 |
+| `pid` | PID 控制 |
+| `qpos` | MuJoCo 中的广义位置 |
+| `qvel` | MuJoCo 中的广义速度 |
+
+---
+
+## 16. 我现在最该关注什么
+
+当前最重要的不是继续加很多新功能，而是先回答这几个问题：
+
+1. tidybot Tracking 能不能稳定训练
+2. `episode_success_per_step` 能不能明显高于以前的几个百分点
+3. reward 上升时，success 是否也跟着上升
+4. 当前“近距离即成功”的设计是否合适
+
+一句话：
+
+先把 **tidybot Tracking 训起来并稳定提高成功率**，再考虑后续更复杂的任务。

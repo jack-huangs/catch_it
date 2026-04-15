@@ -51,7 +51,8 @@ def main(config: DictConfig):
     task = 'Tracking' if config.task == 'Tracking' else 'Catching'
     print("config.num_envs: ", config.num_envs)
     env = gym.make_vec(env_name, num_envs=int(config.num_envs), 
-                    task=task, camera_name=["top"],
+                    # tidybot 原生带 wrist 相机；Tracking 先统一使用它
+                    task=task, camera_name=["wrist"],
                     render_per_step=False, render_mode = "rgb_array",
                     object_name = "object",
                     img_size = config.train.ppo.img_dim,

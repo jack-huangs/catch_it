@@ -10,6 +10,7 @@ sys.path.append(os.path.abspath('../'))
 sys.path.append(os.path.abspath('./gym_dcmm/'))
 import argparse
 import math
+import time
 print(os.getcwd())
 import configs.env.DcmmCfg as DcmmCfg
 import cv2 as cv
@@ -106,6 +107,7 @@ class DcmmVecEnv(gym.Env):
         render_mode="depth_array",#在gym环境中，render_mode参数指定了环境渲染的方式。
         render_per_step=False,
         viewer=False,#viewer参数决定是否显示MuJoCo的图形界面，通常在训练过程中会关闭以节省资源，而在调试或演示时会打开。
+        viewer_sleep=0.03,#viewer 打开时，每次 sync 后额外 sleep 一小段时间，便于肉眼观察测试过程
         imshow_cam=False,#摄像头的图像
         object_eval=False,#是否使用评估对象（通常是训练过程中未见过的对象），用于测试策略的泛化能力
         camera_name=["top", "wrist"],#
@@ -120,10 +122,9 @@ class DcmmVecEnv(gym.Env):
         print_info=False,
         print_contacts=False,
     ):
-        # 这个环境只支持两类任务：
-        # 1. Tracking：追踪飞来的物体
-        # 2. Catching：在追踪基础上尝试抓取
-        if task not in ["Tracking", "Catching"]:
+        # 当前项目已经切到 tidybot + Tracking，
+        # 这个环境类不再保留旧机器人 / Catching 的运行入口。
+        if task != "Tracking":
             raise ValueError("Invalid task: {}".format(task))
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
@@ -135,6 +136,7 @@ class DcmmVecEnv(gym.Env):
         self.device = device
         self.steps_per_policy = steps_per_policy
         self.render_per_step = render_per_step
+        self.viewer_sleep = viewer_sleep
         # Print Settings
         self.print_obs = print_obs
         self.print_reward = print_reward
@@ -143,6 +145,9 @@ class DcmmVecEnv(gym.Env):
         self.print_contacts = print_contacts
         # 构建底层 MuJoCo 机器人对象。后面底盘、机械臂、手的控制都由它负责。
         self.Dcmm = MJ_DCMM(viewer=viewer, object_name=object_name, object_eval=object_eval)
+        self.use_tidybot = self.Dcmm.use_tidybot
+        if not self.use_tidybot:
+            raise ValueError("DcmmVecEnv 现在只支持 tidybot 模型。")
         # self.Dcmm.show_model_info()
         # fps 不是渲染帧率，而是“策略步”对应的观测差分频率
         self.policy_dt = self.steps_per_policy * self.Dcmm.model.opt.timestep
@@ -158,12 +163,27 @@ class DcmmVecEnv(gym.Env):
         self.Dcmm.model_xml_string = self._reset_object()
         self.Dcmm.model = mujoco.MjModel.from_xml_string(self.Dcmm.model_xml_string)
         self.Dcmm.data = mujoco.MjData(self.Dcmm.model)
+        # tidybot 重新载入 model 后，要同步刷新各类索引和默认姿态
+        self.Dcmm.arm_qpos_indices = np.array([self.Dcmm.model.joint(name).qposadr[0] for name in self.Dcmm.arm_joint_names], dtype=int)
+        self.Dcmm.hand_qpos_indices = np.array([self.Dcmm.model.joint(name).qposadr[0] for name in self.Dcmm.hand_joint_names], dtype=int)
+        self.Dcmm.pad_geom_ids = np.array(
+            [mujoco.mj_name2id(self.Dcmm.model, mujoco.mjtObj.mjOBJ_GEOM, name) for name in DcmmCfg.pad_geom_names],
+            dtype=int,
+        )
+        base_body = self.Dcmm.model.body(self.Dcmm.base_body_name)
+        start = int(base_body.geomadr[0])
+        count = int(base_body.geomnum[0])
+        self.Dcmm.base_geom_ids = np.arange(start, start + count, dtype=int)
+        self.Dcmm.data.qpos[self.Dcmm.arm_qpos_indices] = DcmmCfg.arm_joints[:]
+        self.Dcmm.data.qpos[self.Dcmm.hand_qpos_indices] = DcmmCfg.hand_joints[:]
+        self.Dcmm.target_base_pose[:] = self.Dcmm.data.qpos[0:3]
+        mujoco.mj_forward(self.Dcmm.model, self.Dcmm.data)
         # 提前记录关键 geom 的 id，后面做接触检测时会反复使用
-        self.hand_start_id = mujoco.mj_name2id(self.Dcmm.model, mujoco.mjtObj.mjOBJ_GEOM, 'mcp_joint') - 1
-        print("self.hand_start_id: ", self.hand_start_id)
+        self.hand_start_id = -1
+        self.pad_geom_ids = self.Dcmm.pad_geom_ids.copy()
         self.floor_id = mujoco.mj_name2id(self.Dcmm.model, mujoco.mjtObj.mjOBJ_GEOM, 'floor')
         self.object_id = mujoco.mj_name2id(self.Dcmm.model, mujoco.mjtObj.mjOBJ_GEOM, self.object_name)
-        self.base_id = mujoco.mj_name2id(self.Dcmm.model, mujoco.mjtObj.mjOBJ_GEOM, 'ranger_base')
+        self.base_id = -1
 
         # 配置相机和渲染器
         self.Dcmm.model.vis.global_.offwidth = DcmmCfg.cam_config["width"]
@@ -183,9 +203,22 @@ class DcmmVecEnv(gym.Env):
             # self.viewer.cam.elevation = -1.57
         else: self.Dcmm.viewer = None
 
-        # 观测空间是一个嵌套字典：
-        # base / arm / hand / object 分别表示底盘、机械臂、手、目标物体的状态
-        hand_joint_indices = np.where(DcmmCfg.hand_mask == 1)[0] + 15
+        # 观测空间：只保留 tidybot Tracking 所需状态
+        arm_joint_names = self.Dcmm.arm_joint_names
+        arm_low_obs = []
+        arm_high_obs = []
+        for name in arm_joint_names:
+            joint_id = self.Dcmm.model.joint(name).id
+            if bool(self.Dcmm.model.jnt_limited[joint_id]):
+                arm_low_obs.append(self.Dcmm.model.jnt_range[joint_id][0])
+                arm_high_obs.append(self.Dcmm.model.jnt_range[joint_id][1])
+            else:
+                arm_low_obs.append(-np.pi)
+                arm_high_obs.append(np.pi)
+        arm_low_obs = np.array(arm_low_obs, dtype=np.float32)
+        arm_high_obs = np.array(arm_high_obs, dtype=np.float32)
+        hand_low_obs = np.array([0.0], dtype=np.float32)
+        hand_high_obs = np.array([255.0], dtype=np.float32)
         self.observation_space = spaces.Dict(
             {
                 "base": spaces.Dict({
@@ -195,12 +228,12 @@ class DcmmVecEnv(gym.Env):
                     "ee_pos3d": spaces.Box(-10, 10, shape=(3,), dtype=np.float32),#end-effector 3D position	末端三维位置
                     "ee_quat": spaces.Box(-1, 1, shape=(4,), dtype=np.float32),#end-effector  quaternion	末端姿态四元数
                     "ee_v_lin_3d": spaces.Box(-1, 1, shape=(3,), dtype=np.float32),#end-effector 3D linear velocity	末端三维线速度
-                    "joint_pos": spaces.Box(low = np.array([self.Dcmm.model.jnt_range[i][0] for i in range(9, 15)]),#取的是 MuJoCo 模型里第 9 到第 14 号关节
-                                            high = np.array([self.Dcmm.model.jnt_range[i][1] for i in range(9, 15)]),#model.jnt_range[i][1]模型第i个关节的最大值
+                    "joint_pos": spaces.Box(low = arm_low_obs,
+                                            high = arm_high_obs,
                                             dtype=np.float32),
                 }),
-                "hand": spaces.Box(low = np.array([self.Dcmm.model.jnt_range[i][0] for i in hand_joint_indices]),
-                                   high = np.array([self.Dcmm.model.jnt_range[i][1] for i in hand_joint_indices]),
+                "hand": spaces.Box(low = hand_low_obs,
+                                   high = hand_high_obs,
                                    dtype=np.float32),
                 "object": spaces.Dict({
                     "pos3d": spaces.Box(-10, 10, shape=(3,), dtype=np.float32),
@@ -214,11 +247,11 @@ class DcmmVecEnv(gym.Env):
         base_low = np.array([-4, -4])
         base_high = np.array([4, 4])
         # Define the limit for the arm action
-        arm_low = -0.025*np.ones(4)
-        arm_high = 0.025*np.ones(4)
-        # Define the limit for the hand action
-        hand_low = np.array([self.Dcmm.model.jnt_range[i][0] for i in hand_joint_indices])
-        hand_high = np.array([self.Dcmm.model.jnt_range[i][1] for i in hand_joint_indices])
+        arm_low = -0.025*np.ones(7)
+        arm_high = 0.025*np.ones(7)
+        # Tracking 不主动控制夹爪，这里保留 1 维占位动作，默认都会被置零
+        hand_low = np.array([-1.0], dtype=np.float32)
+        hand_high = np.array([1.0], dtype=np.float32)
 
         # Get initial ee_pos3d
         self.init_pos = True
@@ -235,7 +268,7 @@ class DcmmVecEnv(gym.Env):
         self.action_space = spaces.Dict(
             {
                 "base": spaces.Box(base_low, base_high, shape=(2,), dtype=np.float32),
-                "arm": spaces.Box(arm_low, arm_high, shape=(4,), dtype=np.float32),
+                "arm": spaces.Box(arm_low, arm_high, shape=arm_low.shape, dtype=np.float32),
                 "hand": spaces.Box(low = hand_low,
                                    high = hand_high,
                                    dtype = np.float32),
@@ -251,16 +284,14 @@ class DcmmVecEnv(gym.Env):
         self.actions_low = np.concatenate([base_low, arm_low, hand_low])
         self.actions_high = np.concatenate([base_high, arm_high, hand_high])
 
-        # 下面这些维度会被 PPO 直接读取：
-        # Tracking 会去掉手部观测/动作，Catching 会保留更多维度
         self.obs_dim = get_total_dimension(self.observation_space)
         self.act_dim = get_total_dimension(self.action_space)
-        self.obs_t_dim = self.obs_dim - 12 - 6  # dim = 18, 12 for the hand, 6 for the arm joint positions ，Tracking 任务从完整观测里去掉了两部分，手部观测，机械臂关节位置
-        self.act_t_dim = self.act_dim - 12 # dim = 6, 12 for the hand
-        self.obs_c_dim = self.obs_dim - 6  # dim = 30, 6 for the arm joint positions
-        self.act_c_dim = self.act_dim # dim = 18,
+        # 新机器人改成 7 关节 Tracking，关节位置对策略很重要，所以不再从 Tracking 观测里删掉 arm joint_pos
+        self.obs_t_dim = self.obs_dim - 1
+        self.act_t_dim = self.act_dim - 1
+        self.obs_c_dim = self.obs_dim
+        self.act_c_dim = self.act_dim
         print("##### Tracking Task \n obs_dim: {}, act_dim: {}".format(self.obs_t_dim, self.act_t_dim))
-        print("##### Catching Task \n obs_dim: {}, act_dim: {}\n".format(self.obs_c_dim, self.act_c_dim))
 
         # 环境运行过程中的状态变量
         self.arm_limit = True 
@@ -275,15 +306,15 @@ class DcmmVecEnv(gym.Env):
         self.stage = self.stage_list[0] #当前阶段是 tracking 还是 grasping
         self.steps = 0
 
-        self.prev_ctrl = np.zeros(18)
+        self.prev_ctrl = np.zeros(self.act_dim)
         self.init_ctrl = True
         self.vel_init = False
         self.vel_history = deque(maxlen=4)
 
         self.info = {
-            "ee_distance": np.linalg.norm(self.Dcmm.data.body("link6").xpos -  #机械臂末端执行器到物体的三维欧氏距离。机械臂末端 link6 的三维位置 [x, y, z]，
-                                          self.Dcmm.data.body(self.Dcmm.object_name).xpos[0:3]),#物体的三维位置 [x, y, z]，np.linalg.norm(...)求这个向量的长度
-            "base_distance": np.linalg.norm(self.Dcmm.data.body("arm_base").xpos[0:2] -  #机械臂基座在水平面上到物体的二维距离。
+            "ee_distance": np.linalg.norm(self._ee_world_pos() -
+                                          self.Dcmm.data.body(self.Dcmm.object_name).xpos[0:3]),
+            "base_distance": np.linalg.norm(self.Dcmm.data.body(self.Dcmm.arm_base_body_name).xpos[0:2] -
                                             self.Dcmm.data.body(self.Dcmm.object_name).xpos[0:2]),
             "env_time": self.Dcmm.data.time - self.start_time,
             "imgs": {}
@@ -302,9 +333,9 @@ class DcmmVecEnv(gym.Env):
         self.imgs = np.zeros((0, self.img_size[0], self.img_size[1], 1))
 
         # Random PID Params
-        self.k_arm = np.ones(6)
-        self.k_drive = np.ones(4)
-        self.k_steer = np.ones(4)
+        self.k_arm = np.ones(len(DcmmCfg.arm_joints))
+        self.k_drive = np.ones(2)
+        self.k_steer = np.ones(1)
         self.k_hand = np.ones(1)
         # Random Obs & Act Params
         self.k_obs_base = DcmmCfg.k_obs_base
@@ -326,13 +357,14 @@ class DcmmVecEnv(gym.Env):
             raise ValueError("Invalid stage: {}".format(stage))
 
     def _get_contacts(self):
-        # Contact information of the hand
+        # 只保留 tidybot Tracking 的接触逻辑：
+        # hand = 夹爪 pad geom，base = 底盘 geom，object = 目标物体 geom
         geom_ids = self.Dcmm.data.contact.geom
         geom1_ids = self.Dcmm.data.contact.geom1
         geom2_ids = self.Dcmm.data.contact.geom2
+        geom1_hand = np.where(np.isin(geom1_ids, self.pad_geom_ids))[0]
+        geom2_hand = np.where(np.isin(geom2_ids, self.pad_geom_ids))[0]
         ## get the contact points of the hand
-        geom1_hand = np.where((geom1_ids < self.object_id) & (geom1_ids >= self.hand_start_id))[0]
-        geom2_hand = np.where((geom2_ids < self.object_id) & (geom2_ids >= self.hand_start_id))[0]
         contacts_geom1 = np.array([]); contacts_geom2 = np.array([])
         if geom1_hand.size != 0:
             contacts_geom1 = geom_ids[geom1_hand][:,1]
@@ -349,8 +381,8 @@ class DcmmVecEnv(gym.Env):
             contacts_geom2 = geom_ids[geom2_object][:,0]
         object_contacts = np.concatenate((contacts_geom1, contacts_geom2))
         ## get the contact points of the base
-        geom1_base = np.where((geom1_ids == self.base_id))[0]
-        geom2_base = np.where((geom2_ids == self.base_id))[0]
+        geom1_base = np.where(np.isin(geom1_ids, self.Dcmm.base_geom_ids))[0]
+        geom2_base = np.where(np.isin(geom2_ids, self.Dcmm.base_geom_ids))[0]
         contacts_geom1 = np.array([]); contacts_geom2 = np.array([])
         if geom1_base.size != 0:
             contacts_geom1 = geom_ids[geom1_base][:,1]
@@ -368,6 +400,10 @@ class DcmmVecEnv(gym.Env):
             "base_contacts": base_contacts
         }
 
+    def _ee_world_pos(self):
+        # tidybot 用 pinch_site 作为夹爪末端位置
+        return self.Dcmm.data.site(self.Dcmm.ee_site_name).xpos.copy()
+
     def _get_base_vel(self):
         base_yaw = quat2theta(self.Dcmm.data.body("base_link").xquat[0], self.Dcmm.data.body("base_link").xquat[3])
         global_base_vel = self.Dcmm.data.qvel[0:2]
@@ -378,22 +414,23 @@ class DcmmVecEnv(gym.Env):
     def _get_relative_ee_pos3d(self):
         # Caclulate the ee_pos3d w.r.t. the base_link
         base_yaw = quat2theta(self.Dcmm.data.body("base_link").xquat[0], self.Dcmm.data.body("base_link").xquat[3])
-        x,y = relative_position(self.Dcmm.data.body("arm_base").xpos[0:2], 
-                                self.Dcmm.data.body("link6").xpos[0:2], 
+        ee_pos = self._ee_world_pos()
+        x,y = relative_position(self.Dcmm.data.body(self.Dcmm.arm_base_body_name).xpos[0:2], 
+                                ee_pos[0:2], 
                                 base_yaw)
         return np.array([x, y, 
-                         self.Dcmm.data.body("link6").xpos[2]-self.Dcmm.data.body("arm_base").xpos[2]])
+                         ee_pos[2]-self.Dcmm.data.body(self.Dcmm.arm_base_body_name).xpos[2]])
 
     def _get_relative_ee_quat(self):
         # Caclulate the ee_pos3d w.r.t. the base_link
-        quat = relative_quaternion(self.Dcmm.data.body("base_link").xquat, self.Dcmm.data.body("link6").xquat)
+        quat = relative_quaternion(self.Dcmm.data.body("base_link").xquat, self.Dcmm.data.body(self.Dcmm.ee_body_name).xquat)
         return np.array(quat)
 
     def _get_relative_ee_v_lin_3d(self):
         # Caclulate the ee_v_lin3d w.r.t. the base_link
         # In simulation, we can directly get the velocity of the end-effector
-        base_vel = self.Dcmm.data.body("arm_base").cvel[3:6]
-        global_ee_v_lin = self.Dcmm.data.body("link6").cvel[3:6]
+        base_vel = self.Dcmm.data.body(self.Dcmm.arm_base_body_name).cvel[3:6]
+        global_ee_v_lin = self.Dcmm.data.body(self.Dcmm.ee_body_name).cvel[3:6]
         base_yaw = quat2theta(self.Dcmm.data.body("base_link").xquat[0], self.Dcmm.data.body("base_link").xquat[3])
         ee_v_lin_x = math.cos(base_yaw) * (global_ee_v_lin[0]-base_vel[0]) + math.sin(base_yaw) * (global_ee_v_lin[1]-base_vel[1])
         ee_v_lin_y = -math.sin(base_yaw) * (global_ee_v_lin[0]-base_vel[0]) + math.cos(base_yaw) * (global_ee_v_lin[1]-base_vel[1])
@@ -403,15 +440,15 @@ class DcmmVecEnv(gym.Env):
     def _get_relative_object_pos3d(self):
         # Caclulate the object_pos3d w.r.t. the base_link
         base_yaw = quat2theta(self.Dcmm.data.body("base_link").xquat[0], self.Dcmm.data.body("base_link").xquat[3])
-        x,y = relative_position(self.Dcmm.data.body("arm_base").xpos[0:2], 
+        x,y = relative_position(self.Dcmm.data.body(self.Dcmm.arm_base_body_name).xpos[0:2], 
                                 self.Dcmm.data.body(self.Dcmm.object_name).xpos[0:2], 
                                 base_yaw)
         return np.array([x, y, 
-                         self.Dcmm.data.body(self.Dcmm.object_name).xpos[2]-self.Dcmm.data.body("arm_base").xpos[2]])
+                         self.Dcmm.data.body(self.Dcmm.object_name).xpos[2]-self.Dcmm.data.body(self.Dcmm.arm_base_body_name).xpos[2]])
 
     def _get_relative_object_v_lin_3d(self):
         # Caclulate the object_v_lin3d w.r.t. the base_link
-        base_vel = self.Dcmm.data.body("arm_base").cvel[3:6]
+        base_vel = self.Dcmm.data.body(self.Dcmm.arm_base_body_name).cvel[3:6]
         global_object_v_lin = self.Dcmm.data.joint(self.Dcmm.object_name).qvel[0:3]
         base_yaw = quat2theta(self.Dcmm.data.body("base_link").xquat[0], self.Dcmm.data.body("base_link").xquat[3])
         object_v_lin_x = math.cos(base_yaw) * (global_object_v_lin[0]-base_vel[0]) + math.sin(base_yaw) * (global_object_v_lin[1]-base_vel[1])
@@ -451,10 +488,10 @@ class DcmmVecEnv(gym.Env):
                 # 所以它表示：刚才动作执行后，末端移动得有多快
                 'ee_v_lin_3d': (ee_pos3d - self.prev_ee_pos3d)*self.fps + np.random.normal(0, self.k_obs_arm, 3),
                 # 机械臂 6 个关节角
-                "joint_pos": np.array(self.Dcmm.data.qpos[15:21]) + np.random.normal(0, self.k_obs_arm, 6),
+                "joint_pos": np.array(self.Dcmm.data.qpos[self.Dcmm.arm_qpos_indices]) + np.random.normal(0, self.k_obs_arm, len(self.Dcmm.arm_qpos_indices)),
             },
             # 手部观测
-            "hand": self._get_hand_obs() + np.random.normal(0, self.k_obs_hand, 12),
+            "hand": self._get_hand_obs() + np.random.normal(0, self.k_obs_hand, len(self._get_hand_obs())),
             "object": {
                 # 物体位置（相对坐标）
                 "pos3d": obj_pos3d + np.random.normal(0, self.k_obs_object, 3),
@@ -473,27 +510,15 @@ class DcmmVecEnv(gym.Env):
         # return obs_tensor
 
     def _get_hand_obs(self):
-        # print("full hand: ", self.Dcmm.data.qpos[21:37])
-        hand_obs = np.zeros(12)
-        # Thumb
-        hand_obs[9] = self.Dcmm.data.qpos[21+13]
-        hand_obs[10] = self.Dcmm.data.qpos[21+14]
-        hand_obs[11] = self.Dcmm.data.qpos[21+15]
-        # Other Three Fingers
-        hand_obs[0] = self.Dcmm.data.qpos[21]
-        hand_obs[1:3] = self.Dcmm.data.qpos[(21+2):(21+4)]
-        hand_obs[3] = self.Dcmm.data.qpos[21+4]
-        hand_obs[4:6] = self.Dcmm.data.qpos[(21+6):(21+8)]
-        hand_obs[6] = self.Dcmm.data.qpos[21+8]
-        hand_obs[7:9] = self.Dcmm.data.qpos[(21+10):(21+12)]
-        return hand_obs
+        # 夹爪当前开合状态，这里只取右侧 driver joint 的位置作 1 维观测
+        return np.array([self.Dcmm.data.qpos[self.Dcmm.hand_qpos_indices[0]]], dtype=np.float32)
     
     def _get_info(self):
         # Time of the Mujoco environment
         env_time = self.Dcmm.data.time - self.start_time
-        ee_distance = np.linalg.norm(self.Dcmm.data.body("link6").xpos - 
+        ee_distance = np.linalg.norm(self._ee_world_pos() - 
                                     self.Dcmm.data.body(self.Dcmm.object_name).xpos[0:3])
-        base_distance = np.linalg.norm(self.Dcmm.data.body("arm_base").xpos[0:2] -
+        base_distance = np.linalg.norm(self.Dcmm.data.body(self.Dcmm.arm_base_body_name).xpos[0:2] -
                                         self.Dcmm.data.body(self.Dcmm.object_name).xpos[0:2])
         # print("base_distance: ", base_distance)
         if self.print_info: 
@@ -514,17 +539,17 @@ class DcmmVecEnv(gym.Env):
         self.action_buffer["hand"].append(copy.deepcopy(self.Dcmm.target_hand_qpos[:]))
 
     def _get_ctrl(self):
-        # 把高层目标动作转成 MuJoCo 真正执行的底层控制量：
-        # 底盘靠 IK + PID，机械臂和手靠 PID
-        mv_steer, mv_drive = self.Dcmm.move_base_vel(self.action_buffer["base"][0]) # 8
-        mv_arm = self.Dcmm.arm_pid.update(self.action_buffer["arm"][0], self.Dcmm.data.qpos[15:21], self.Dcmm.data.time) # 6
-        mv_hand = self.Dcmm.hand_pid.update(self.action_buffer["hand"][0], self.Dcmm.data.qpos[21:37], self.Dcmm.data.time) # 16
-        ctrl = np.concatenate([mv_steer, mv_drive, mv_arm, mv_hand], axis=0)
-        # 给控制量加噪声，模拟执行误差
-        ctrl *= np.random.normal(1, self.k_act, 30)
-        if self.print_ctrl:
-            print("##### ctrl:")
-            print("mv_steer: {}, \nmv_drive: {}, \nmv_arm: {}, \nmv_hand: {}\n".format(mv_steer, mv_drive, mv_arm, mv_hand))
+        # tidybot 的 actuator 本身就是 position controller；
+        # 这里直接把“目标底盘位置 + 目标关节角 + 目标夹爪控制量”写成 ctrl
+        ctrl = np.zeros(self.Dcmm.model.nu)
+        self.Dcmm.move_base_vel(self.action_buffer["base"][0])
+        ctrl[0:2] = self.Dcmm.target_base_pose[0:2]
+        ctrl[2] = self.Dcmm.target_base_pose[2]
+        ctrl[3:10] = self.action_buffer["arm"][0]
+        ctrl[10] = self.action_buffer["hand"][0][0]
+        # Tracking 训练里希望 tidybot 尽量平稳；只有显式配置了执行噪声时才扰动控制量。
+        if self.k_act > 0:
+            ctrl *= np.random.normal(1, self.k_act, ctrl.shape[0])
         return ctrl
 
     def _reset_object(self):
@@ -568,23 +593,23 @@ class DcmmVecEnv(gym.Env):
         return xml_str
 
     def random_object_pose(self):
-        # Random Position
-        x = np.random.rand() - 0.5 # (-0.5, 0.5)
-        y = 2.2 + 0.3 * np.random.rand() # (2.2, 2.5)
-        # Low or High Starting Position
-        low_factor = False if np.random.rand() < 0.5 else True
-        # low_factor = True
-        if low_factor: height = 0.7 + 0.3 * np.random.rand()# (0.7, 1.0)
-        else: height = 1.0 + 0.6 * np.random.rand() # (1.0, 1.6)
-        # Random Velocity
-        r_vel = 1 + np.random.rand() # (1, 2)
-        alpha_vel = math.pi * (np.random.rand()*1/6 + 5/12) # alpha_vel = (5/12 * pi, 7/12 * pi)
-        # alpha_vel = math.pi * (np.random.rand()*1/3 + 1/3) # alpha_vel = (1/3 * pi, 2/3 * pi)
-        v_lin_x = r_vel * math.cos(alpha_vel) # (-0.0, -0.5)
-        v_lin_y = - r_vel * math.sin(alpha_vel) # (-0.5, -1.0)
-        v_lin_z = 0.5 * np.random.rand() + 2.0 # (2.0, 2.5)
-        if y > 2.25: v_lin_y -= 0.4
-        if height < 1.0: v_lin_z += 1
+        # 让物体主要从 tidybot 正前方飞来：
+        # 位置集中在 +Y 方向，速度主分量沿 -Y 指向机器人，只保留少量左右扰动。
+        x = np.random.uniform(*DcmmCfg.tracking_object_x_range)
+        y = np.random.uniform(*DcmmCfg.tracking_object_y_range)
+        low_factor = np.random.rand() < 0.5
+        if low_factor:
+            height = np.random.uniform(*DcmmCfg.tracking_object_low_height)
+        else:
+            height = np.random.uniform(*DcmmCfg.tracking_object_high_height)
+        v_lin_x = np.random.uniform(-DcmmCfg.tracking_object_lateral_speed,
+                                    DcmmCfg.tracking_object_lateral_speed)
+        v_lin_y = -np.random.uniform(*DcmmCfg.tracking_object_forward_speed)
+        v_lin_z = np.random.uniform(*DcmmCfg.tracking_object_vertical_speed)
+        if y > 2.3:
+            v_lin_y -= 0.2
+        if height < 1.0:
+            v_lin_z += 0.4
         self.object_pos3d = np.array([x, y, height])
         self.object_vel6d = np.array([v_lin_x, v_lin_y, v_lin_z, 0.0, 0.0, 0.0])
         # Random Static Time
@@ -595,15 +620,27 @@ class DcmmVecEnv(gym.Env):
 
     
     def random_PID(self):
+        if self.Dcmm.use_tidybot:
+            # tidybot 当前直接使用 position actuator 追踪目标关节角 / 底盘位置，
+            # 这里不再随机化 PID 或延迟缓冲，避免训练和手动调试时出现无意义抖动。
+            self.k_arm = np.ones(len(DcmmCfg.arm_joints))
+            self.k_drive = np.ones(self.k_drive.shape[0])
+            self.k_steer = np.ones(self.k_steer.shape[0])
+            self.k_hand = np.ones(1)
+            self.action_buffer["base"].set_maxlen(1)
+            self.action_buffer["arm"].set_maxlen(1)
+            self.action_buffer["hand"].set_maxlen(1)
+            self.action_buffer["base"].clear()
+            self.action_buffer["arm"].clear()
+            self.action_buffer["hand"].clear()
+            return
         # Random the PID Controller Params in DCMM
-        self.k_arm = np.random.uniform(0, 1, size=6)
-        self.k_drive = np.random.uniform(0, 1, size=4)
-        self.k_steer = np.random.uniform(0, 1, size=4)
+        self.k_arm = np.random.uniform(0, 1, size=len(DcmmCfg.arm_joints))
+        self.k_drive = np.random.uniform(0, 1, size=self.k_drive.shape[0])
+        self.k_steer = np.random.uniform(0, 1, size=self.k_steer.shape[0])
         self.k_hand = np.random.uniform(0, 1, size=1)
         # Reset the PID Controller
         self.Dcmm.arm_pid.reset(self.k_arm*(DcmmCfg.k_arm[1]-DcmmCfg.k_arm[0])+DcmmCfg.k_arm[0])#控机械臂的 PID，作用是把“策略输出的末端位姿增量”转成“每个机械臂关节的目标位置”
-        self.Dcmm.steer_pid.reset(self.k_steer*(DcmmCfg.k_steer[1]-DcmmCfg.k_steer[0])+DcmmCfg.k_steer[0])#控底盘转向的 PID，作用是把“策略输出的底盘速度”转成“底盘的转向角度”
-        self.Dcmm.drive_pid.reset(self.k_drive*(DcmmCfg.k_drive[1]-DcmmCfg.k_drive[0])+DcmmCfg.k_drive[0]) #控底盘驱动轮速度的 PID，作用是把“策略输出的底盘速度”转成“每个轮子的转速”
         self.Dcmm.hand_pid.reset(self.k_hand[0]*(DcmmCfg.k_hand[1]-DcmmCfg.k_hand[0])+DcmmCfg.k_hand[0])#控手指关节的 PID，作用是把“策略输出的手指关节位置”转成“每个手指关节的力
         # Random the Delay Buffer Params in DCMM
         self.action_buffer["base"].set_maxlen(np.random.choice(DcmmCfg.act_delay['base']))
@@ -618,16 +655,21 @@ class DcmmVecEnv(gym.Env):
         # 真正的“物理世界重置”都在这里做：
         # 清空状态、还原关节、随机目标物体、随机重力、随机 PID、随机延迟
         mujoco.mj_resetData(self.Dcmm.model, self.Dcmm.data)
-        mujoco.mj_resetData(self.Dcmm.model_arm, self.Dcmm.data_arm)
+        if self.Dcmm.data_arm is not None:
+            mujoco.mj_resetData(self.Dcmm.model_arm, self.Dcmm.data_arm)
         if self.Dcmm.model.na == 0:
             self.Dcmm.data.act[:] = None
-        if self.Dcmm.model_arm.na == 0:
+        if self.Dcmm.data_arm is not None and self.Dcmm.model_arm.na == 0:
             self.Dcmm.data_arm.act[:] = None
         self.Dcmm.data.ctrl = np.zeros(self.Dcmm.model.nu)
-        self.Dcmm.data_arm.ctrl = np.zeros(self.Dcmm.model_arm.nu)
-        self.Dcmm.data.qpos[15:21] = DcmmCfg.arm_joints[:]
-        self.Dcmm.data.qpos[21:37] = DcmmCfg.hand_joints[:]
-        self.Dcmm.data_arm.qpos[0:6] = DcmmCfg.arm_joints[:]
+        if self.Dcmm.data_arm is not None:
+            self.Dcmm.data_arm.ctrl = np.zeros(self.Dcmm.model_arm.nu)
+        # 把底盘直接放到“正面对球”的初始位姿。
+        self.Dcmm.data.qpos[0:3] = DcmmCfg.base_init_pose[:]
+        self.Dcmm.data.qpos[self.Dcmm.arm_qpos_indices] = DcmmCfg.arm_joints[:]
+        self.Dcmm.data.qpos[self.Dcmm.hand_qpos_indices] = DcmmCfg.hand_joints[:]
+        if self.Dcmm.data_arm is not None:
+            self.Dcmm.data_arm.qpos[0:6] = DcmmCfg.arm_joints[:6]
         self.Dcmm.data.body("object").xpos[0:3] = np.array([2, 2, 1])
         # 随机生成物体初始位置、初速度和姿态
         self.random_object_pose()
@@ -636,13 +678,18 @@ class DcmmVecEnv(gym.Env):
         # TODO: TESTING
         # self.Dcmm.set_throw_pos_vel(pose=np.array([0.0, 0.4, 1.0, 1.0, 0.0, 0.0, 0.0]),
         #                             velocity=np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0]))
-        # Random Gravity
-        self.Dcmm.model.opt.gravity[2] = -9.81 + 0.5*np.random.uniform(-1, 1)
+        # tidybot Tracking 先固定重力，避免底盘和机械臂在同一条策略上还要适配随机重力，
+        # 这会放大 position actuator 的抖动感；object 的随机抛掷仍然保留。
+        if self.Dcmm.use_tidybot:
+            self.Dcmm.model.opt.gravity[2] = -9.81
+        else:
+            self.Dcmm.model.opt.gravity[2] = -9.81 + 0.5*np.random.uniform(-1, 1)
         # Random PID
         self.random_PID()
         # Forward Kinematics
         mujoco.mj_forward(self.Dcmm.model, self.Dcmm.data)
-        mujoco.mj_forward(self.Dcmm.model_arm, self.Dcmm.data_arm)
+        if self.Dcmm.data_arm is not None:
+            mujoco.mj_forward(self.Dcmm.model_arm, self.Dcmm.data_arm)
 
 
     def reset(self):
@@ -660,6 +707,7 @@ class DcmmVecEnv(gym.Env):
 
         ## Reset the target velocity of the mobile base
         self.Dcmm.target_base_vel = np.array([0.0, 0.0, 0.0])
+        self.Dcmm.target_base_pose[:] = self.Dcmm.data.qpos[0:3]
         ## Reset the target joint positions of the arm
         self.Dcmm.target_arm_qpos[:] = DcmmCfg.arm_joints[:]
         ## Reset the target joint positions of the hand
@@ -671,9 +719,9 @@ class DcmmVecEnv(gym.Env):
         self.reward_stability = 0
 
         self.info = {
-            "ee_distance": np.linalg.norm(self.Dcmm.data.body("link6").xpos - 
+            "ee_distance": np.linalg.norm(self._ee_world_pos() - 
                                        self.Dcmm.data.body(self.Dcmm.object_name).xpos[0:3]),
-            "base_distance": np.linalg.norm(self.Dcmm.data.body("arm_base").xpos[0:2] -
+            "base_distance": np.linalg.norm(self.Dcmm.data.body(self.Dcmm.arm_base_body_name).xpos[0:2] -
                                              self.Dcmm.data.body(self.Dcmm.object_name).xpos[0:2]),
             "evn_time": self.Dcmm.data.time - self.start_time,
         }
@@ -698,7 +746,10 @@ class DcmmVecEnv(gym.Env):
         Input: ctrl, dict
         Return: norm, float
         '''
-        ctrl_array = np.concatenate([ctrl[component]*DcmmCfg.reward_weights['r_ctrl'][component] for component in components])
+        ctrl_array = np.concatenate([
+            np.asarray(ctrl[component], dtype=np.float32) * DcmmCfg.reward_weights['r_ctrl'][component]
+            for component in components
+        ])
         return np.linalg.norm(ctrl_array)
 
 
@@ -742,100 +793,44 @@ class DcmmVecEnv(gym.Env):
         else:
             self.reward_touch = 0
 
-        if self.task == "Catching":
-            # Catching 任务分 tracking / grasping 两个阶段，奖励也不同
-            reward_orient = 0
-            ## Calculate the total reward in different stages
-            if self.stage == "tracking":
-                ## Ctrl Penalty
-                # Compute the norm of hand joint movement through the current actions in the tracking stage
-                reward_ctrl = - self.norm_ctrl(ctrl, {"hand"})
-                ## Object Orientation Reward
-                # Compute the dot product of the velocity vector of the object and the z axis of the end_effector
-                rotation_matrix = quaternion_to_rotation_matrix(obs["arm"]["ee_quat"])
-                local_velocity_vector = np.dot(rotation_matrix.T, obs["object"]["v_lin_3d"])
-                hand_z_axis = np.array([0, 0, 1])
-                reward_orient = abs(cos_angle_between_vectors(local_velocity_vector, hand_z_axis)) * DcmmCfg.reward_weights["r_orient"]
-                ## Add up the rewards
-                rewards = reward_base_pos + reward_ee_pos + reward_orient + reward_ctrl + reward_collision + reward_constraint + self.reward_touch
-                if self.print_reward:
-                    if reward_constraint < 0:
-                        print("ctrl: ", ctrl)
-                    print("### print reward")
-                    print("reward_ee_pos: {:.3f}, reward_ee_precision: {:.3f}, reward_orient: {:.3f}, reward_ctrl: {:.3f}, \n".format(
-                        reward_ee_pos, reward_ee_precision, reward_orient, reward_ctrl
-                    ) + "reward_collision: {:.3f}, reward_constraint: {:.3f}, reward_touch: {:.3f}".format(
-                        reward_collision, reward_constraint, self.reward_touch
-                    ))
-                    print("total reward: {:.3f}\n".format(rewards))
-            else:
-                ## Ctrl Penalty
-                # Compute the norm of base and arm movement through the current actions in the grasping stage
-                reward_ctrl = - self.norm_ctrl(ctrl, {"base", "arm"})
-                ## Set the Orientation Reward to maximum (1)
-                reward_orient = 1
-                ## Object Touch Stability Reward
-                # Compute the reward when the object is caught stably in the hand
-                if self.reward_touch:
-                    self.reward_stability = (info["env_time"] - self.catch_time) * DcmmCfg.reward_weights["r_stability"]
-                else:
-                    self.reward_stability = 0.0
-                ## Add up the rewards
-                rewards = reward_base_pos + reward_ee_pos + reward_ee_precision + reward_orient + reward_ctrl + reward_collision + reward_constraint \
-                        + self.reward_touch + self.reward_stability
-                if self.print_reward:
-                    print("##### print reward")
-                    print("reward_touch: {}, \nreward_ee_pos: {:.3f}, reward_ee_precision: {:.3f}, reward_orient: {:.3f}, \n".format(
-                        self.reward_touch, reward_ee_pos, reward_ee_precision, reward_orient
-                    ) + "reward_stability: {:.3f}, reward_collision: {:.3f}, \nreward_ctrl: {:.3f}, reward_constraint: {:.3f}".format(
-                        self.reward_stability, reward_collision, reward_ctrl, reward_constraint
-                    ))
-                    print("total reward: {:.3f}\n".format(rewards))
-        elif self.task == 'Tracking':
-            # Tracking 任务只关心“把手掌追到物体附近”
-            # 因此主要奖励项是：接近目标、姿态合适、控制平稳、成功触碰
-            #(7) 控制惩罚 ，动作越大，惩罚越大
-            reward_ctrl = - self.norm_ctrl(ctrl, {"base", "arm"})
-            ## Object Orientation Reward
-            # Compute the dot product of the velocity vector of the object and the z axis of the end_effector
-            rotation_matrix = quaternion_to_rotation_matrix(obs["arm"]["ee_quat"])
-            local_velocity_vector = np.dot(rotation_matrix.T, obs["object"]["v_lin_3d"])
-            hand_z_axis = np.array([0, 0, 1])
-
-            #(8) 姿态奖励
-            reward_orient = abs(cos_angle_between_vectors(local_velocity_vector, hand_z_axis)) * DcmmCfg.reward_weights["r_orient"]
-            ## ！！！Tracking 总奖励
-            rewards = reward_base_pos + reward_ee_pos + reward_ee_precision + reward_orient + reward_ctrl + reward_collision + reward_constraint + self.reward_touch
-            if self.print_reward: #打印奖励
-                if reward_constraint < 0:
-                    print("ctrl: ", ctrl)
-                print("### print reward")
-                print("reward_ee_pos: {:.3f}, reward_ee_precision: {:.3f}, reward_orient: {:.3f}, reward_ctrl: {:.3f}, \n".format(
-                    reward_ee_pos, reward_ee_precision, reward_orient, reward_ctrl
-                ) + "reward_collision: {:.3f}, reward_constraint: {:.3f}, reward_touch: {:.3f}".format(
-                    reward_collision, reward_constraint, self.reward_touch
-                ))
-                print("total reward: {:.3f}\n".format(rewards))
+        # Tracking 任务只关心“把夹爪末端追到物体附近”
+        reward_ctrl = - self.norm_ctrl(ctrl, {"base", "arm"})
+        if info["ee_distance"] < DcmmCfg.tracking_close_bonus_thresh:
+            reward_close = (1.0 - info["ee_distance"] / DcmmCfg.tracking_close_bonus_thresh) \
+                * DcmmCfg.reward_weights["r_close"]
         else:
-            raise ValueError("Invalid task: {}".format(self.task))
+            reward_close = 0.0
+        # tidybot 的 Tracking 更希望“夹爪末端朝向”和“飞来物体速度方向”一致
+        rotation_matrix = quaternion_to_rotation_matrix(obs["arm"]["ee_quat"])
+        gripper_forward_axis = rotation_matrix @ np.array([0.0, 0.0, -1.0])
+        object_velocity = obs["object"]["v_lin_3d"]
+        reward_orient = max(cos_angle_between_vectors(object_velocity, gripper_forward_axis), 0.0) \
+            * DcmmCfg.reward_weights["r_orient"]
+        rewards = reward_base_pos + reward_ee_pos + reward_ee_precision + reward_close + reward_orient + reward_ctrl + reward_collision + reward_constraint + self.reward_touch
+        if self.print_reward:
+            if reward_constraint < 0:
+                print("ctrl: ", ctrl)
+            print("### print reward")
+            print("reward_ee_pos: {:.3f}, reward_ee_precision: {:.3f}, reward_close: {:.3f}, reward_orient: {:.3f}, reward_ctrl: {:.3f}, \n".format(
+                reward_ee_pos, reward_ee_precision, reward_close, reward_orient, reward_ctrl
+            ) + "reward_collision: {:.3f}, reward_constraint: {:.3f}, reward_touch: {:.3f}".format(
+                reward_collision, reward_constraint, self.reward_touch
+            ))
+            print("total reward: {:.3f}\n".format(rewards))
         
         return rewards
 
     def _step_mujoco_simulation(self, action_dict):
         # 这个函数是真正的“执行动作”：
         # 它把 PPO 给的高层动作转成机器人目标，再在 MuJoCo 里连续模拟若干小步
+        # gym 单环境调试时，action_dict 里的值可能还是 Python list；这里先统一转成 ndarray
+        action_dict = {k: np.asarray(v, dtype=np.float32) for k, v in action_dict.items()}
         self.Dcmm.target_base_vel[0:2] *= 1.0 - self.base_vel_lpf_alpha
         self.Dcmm.target_base_vel[0:2] += self.base_vel_lpf_alpha * action_dict["base"]
-        # 机械臂动作只给了 4 维，这里补成 6 维位姿增量再做 IK
-        action_arm = np.concatenate((action_dict["arm"], np.zeros(3)))
-        result_QP, _ = self.Dcmm.move_ee_pose(action_arm)
-        if result_QP[1]:
-            self.arm_limit = True
-            self.Dcmm.target_arm_qpos[:] = result_QP[0]
-        else:
-            # print("IK Failed!!!")
-            self.arm_limit = False
-        # 手部动作转成目标关节角
+        # tidybot Tracking 直接输出 7 关节增量，不再走旧的末端 IK
+        _, success = self.Dcmm.set_arm_target_qpos(action_dict["arm"])
+        self.arm_limit = success
+        # 夹爪在 Tracking 里默认保持张开；这里仍保留 1 维占位接口，方便以后需要时细调
         self.Dcmm.action_hand2qpos(action_dict["hand"])
         # 把目标动作压入延迟缓冲区，后续控制器读取缓冲区前端的动作执行
         self.update_target_ctrl()
@@ -844,7 +839,7 @@ class DcmmVecEnv(gym.Env):
         # 一次策略动作会执行 steps_per_policy 个 MuJoCo 小步
         for _ in range(self.steps_per_policy):
             # 根据目标动作和当前状态，生成底层控制量并写入 MuJoCo
-            self.Dcmm.data.ctrl[:-1] = self._get_ctrl()
+            self.Dcmm.data.ctrl[:] = self._get_ctrl()
             if self.render_per_step:
                 # Rendering
                 img = self.render()
@@ -855,11 +850,9 @@ class DcmmVecEnv(gym.Env):
             if self.Dcmm.data.time - self.start_time < self.object_static_time:
                 self.Dcmm.set_throw_pos_vel(pose=np.concatenate((self.object_pos3d[:], self.object_q[:])),
                                             velocity=np.zeros(6))
-                self.Dcmm.data.ctrl[-1] = self.random_mass * -self.Dcmm.model.opt.gravity[2]
             elif not self.object_throw:
                 self.Dcmm.set_throw_pos_vel(pose=np.concatenate((self.object_pos3d[:], self.object_q[:])),
                                             velocity=self.object_vel6d[:])
-                self.Dcmm.data.ctrl[-1] = 0.0
                 self.object_throw = True
 
             mujoco.mj_step(self.Dcmm.model, self.Dcmm.data)
@@ -870,25 +863,18 @@ class DcmmVecEnv(gym.Env):
             # 底盘碰撞直接视为失败
             if self.contacts['base_contacts'].size != 0:
                 self.terminated = True
-            mask_coll = self.contacts['object_contacts'] < self.hand_start_id
-            mask_finger = self.contacts['object_contacts'] > self.hand_start_id
-            mask_hand = self.contacts['object_contacts'] >= self.hand_start_id
-            mask_palm = self.contacts['object_contacts'] == self.hand_start_id
+            object_contacts = self.contacts['object_contacts']
+            mask_pad = np.isin(object_contacts, self.pad_geom_ids)
+            mask_coll = np.logical_not(mask_pad)
+            mask_finger = mask_pad
+            mask_palm = mask_pad
             # 根据接触部位判断是否算“成功碰到物体”
-            if self.step_touch == False:
-                if self.task == "Catching" and np.any(mask_hand):
-                    self.step_touch = True
-                # Tracking 原来只有手掌接触才算成功；
-                # 这里放宽条件：手掌或手指接触都算成功
-                elif self.task == "Tracking" and (np.any(mask_palm) or np.any(mask_finger)):
-                    self.step_touch = True
+            if self.step_touch == False and (np.any(mask_palm) or np.any(mask_finger)):
+                self.step_touch = True
             # 根据错误接触判断是否提前失败结束
             if not self.terminated:
-                if self.task == "Catching":
-                    self.terminated = np.any(mask_coll)
-                elif self.task == "Tracking":
-                    # Tracking 放宽后，finger 不再算失败，只有真正错误碰撞才算失败
-                    self.terminated = np.any(mask_coll)
+                # Tracking 放宽后，finger 不再算失败，只有真正错误碰撞才算失败
+                self.terminated = np.any(mask_coll)
             # 一旦失败，本步后面的 MuJoCo 小步就不用再跑了
             if self.terminated:
                 break
@@ -901,12 +887,11 @@ class DcmmVecEnv(gym.Env):
         # 先根据最新仿真状态重新计算观测和辅助信息
         obs = self._get_obs()
         info = self._get_info()
-        if self.task == 'Catching':
-            # Catching 任务中，靠近后进入 grasping 阶段；抓取阶段如果又离远了就失败
-            if info['ee_distance'] < DcmmCfg.distance_thresh and self.stage == "tracking":
-                self.stage = "grasping"
-            elif info['ee_distance'] >= DcmmCfg.distance_thresh and self.stage == "grasping":
-                self.terminated = True
+        if info['ee_distance'] < DcmmCfg.tracking_success_thresh:
+            # 对 tidybot 的 Tracking 放宽成功判定：
+            # 只要夹爪末端已经非常接近物体，就直接视为成功，
+            # 不再强依赖 pad 几何体发生离散接触。
+            self.step_touch = True
         # 根据本步表现打分
         reward = self.compute_reward(obs, info, action)
         self.info["base_distance"] = info["base_distance"]
@@ -919,19 +904,9 @@ class DcmmVecEnv(gym.Env):
                                len(self.action_buffer['arm']),
                                len(self.action_buffer['hand'])])
         info['ctrl_params'] = np.concatenate((self.k_arm, self.k_drive, self.k_hand, ctrl_delay))
-        # terminated / truncated 的含义：
-        # - terminated：失败结束（碰撞、错误接触等）
-        # - truncated：正常结束（Tracking 碰到目标；Catching 时间到）
-        if self.task == "Catching":
-            if info["env_time"] > self.env_time:
-                # print("Catching Success!!!!!!")
-                truncated = True
-            else: truncated = False
-        elif self.task == "Tracking":
-            if self.step_touch:
-                # print("Tracking Success!!!!!!")
-                truncated = True
-            else: truncated = False
+        # terminated：失败结束（碰撞、错误接触等）
+        # truncated：正常结束（Tracking 碰到目标）
+        truncated = bool(self.step_touch)
         terminated = self.terminated
         done = terminated or truncated
         if done:
@@ -1021,6 +996,9 @@ class DcmmVecEnv(gym.Env):
             # Sync the viewer (if exists) with the data
             if self.Dcmm.viewer != None: 
                 self.Dcmm.viewer.sync()
+                # 测试/调试时给 viewer 留一点显示时间，否则肉眼会感觉画面“飞过去了”
+                if self.viewer_sleep > 0:
+                    time.sleep(self.viewer_sleep)
         if self.render_mode == "depth_rgb_array":
             # Only keep the depth image
             imgs = imgs_depth
@@ -1034,33 +1012,32 @@ class DcmmVecEnv(gym.Env):
     def run_test(self):
         global cmd_lin_x, cmd_lin_y, trigger_delta, trigger_delta_hand, delta_xyz, delta_xyz_hand
         self.reset()
-        action = np.zeros(18)
+        # tidybot Tracking 的动作维度是 10：
+        # 2 维底盘 + 7 维机械臂 + 1 维夹爪占位
+        action = np.zeros(10)
         while True:
-            # Note: action's dim = 18, which includes 2 for the base, 4 for the arm, and 12 for the hand
-            # print("##### stage: ", self.stage)
             # Keyboard control
             action[0:2] = np.array([cmd_lin_x, cmd_lin_y])
             if trigger_delta:
                 print("delta_xyz: ", delta_xyz)
-                action[2:6] = np.array([delta_xyz, delta_xyz, delta_xyz, delta_xyz])
+                action[2:9] = np.ones(7) * delta_xyz
                 trigger_delta = False
             else:
-                action[2:6] = np.zeros(4)
+                action[2:9] = np.zeros(7)
             if trigger_delta_hand:
                 print("delta_xyz_hand: ", delta_xyz_hand)
-                action[6:18] = np.ones(12)*delta_xyz_hand
+                action[9:10] = np.ones(1) * delta_xyz_hand
                 trigger_delta_hand = False
             else:
-                action[6:18] = np.zeros(12)
+                action[9:10] = np.zeros(1)
             base_tensor = action[:2]
-            arm_tensor = action[2:6]
-            hand_tensor = action[6:18]
+            arm_tensor = action[2:9]
+            hand_tensor = action[9:10]
             actions_dict = {
                 'arm': arm_tensor,
                 'base': base_tensor,
                 'hand': hand_tensor
             }
-            # print("self.Dcmm.data.body('link6'):", self.Dcmm.data.body('link6'))
             observation, reward, terminated, truncated, info = self.step(actions_dict)
 
 if __name__ == "__main__":
@@ -1070,10 +1047,10 @@ if __name__ == "__main__":
     parser.add_argument('--imshow_cam', action='store_true', help="imshow the camera image or not")
     args = parser.parse_args()
     print("args: ", args)
-    env = DcmmVecEnv(task='Catching', object_name='object', render_per_step=False, 
+    env = DcmmVecEnv(task='Tracking', object_name='object', render_per_step=False, 
                     print_reward=False, print_info=False, 
                     print_contacts=False, print_ctrl=False, 
-                    print_obs=False, camera_name = ["top"],
+                    print_obs=False, camera_name = ["wrist"],
                     render_mode="rgb_array", imshow_cam=args.imshow_cam, 
                     viewer = args.viewer, object_eval=False,
                     env_time = 2.5, steps_per_policy=20)

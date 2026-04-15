@@ -437,7 +437,8 @@ class PPO_Track(object):
         else:
             obs_array = np.concatenate((
                     obs["base"]["v_lin_2d"], 
-                    obs["arm"]["ee_pos3d"], obs["arm"]["ee_quat"], obs["arm"]["ee_v_lin_3d"],
+                    # 新 tidybot Tracking 改成关节空间控制，joint_pos 也要一起喂给策略
+                    obs["arm"]["ee_pos3d"], obs["arm"]["ee_quat"], obs["arm"]["ee_v_lin_3d"], obs["arm"]["joint_pos"],
                     obs["object"]["pos3d"], obs["object"]["v_lin_3d"],
                     # obs["hand"],# TODO: TEST
                     ), axis=1)
@@ -450,8 +451,9 @@ class PPO_Track(object):
         # 网络输出在 [-1, 1] 附近，这里按配置放缩回环境真实动作范围
         if self.env.call('task')[0] == 'Tracking':
             base_tensor = actions[:, :2] * self.action_track_denorm[0]
-            arm_tensor = actions[:, 2:5] * self.action_track_denorm[1]
-            hand_tensor = actions[:, 5:] * self.action_track_denorm[2]
+            # tidybot Tracking 的 arm 动作维度改成 7 个关节增量
+            arm_tensor = actions[:, 2:9] * self.action_track_denorm[1]
+            hand_tensor = actions[:, 9:] * self.action_track_denorm[2]
         else:
             base_tensor = actions[:, :2] * self.action_catch_denorm[0]
             arm_tensor = actions[:, 2:5] * self.action_catch_denorm[1]
@@ -588,8 +590,10 @@ class PPO_Track(object):
             self.current_rewards = self.current_rewards * not_dones.unsqueeze(1)
             self.current_lengths = self.current_lengths * not_dones
         
-        res_dict = self.model_act(self.obs)
-        self.agent_steps = (self.agent_steps + self.batch_size)
+        # 测试阶段不更新网络参数，但仍然累计已经测试过的环境步数，
+        # 方便外层 test() 按 max_test_steps 正常结束。
+        _ = self.model_act(self.obs)
+        self.test_steps = (self.test_steps + self.batch_size)
 
     # 测试入口：循环调用 play_test_steps，并输出平均表现
     def test(self):
@@ -597,6 +601,9 @@ class PPO_Track(object):
         reset_obs, _ = self.env.reset()
         self.obs = {'obs': self.obs2tensor(reset_obs)}
         self.test_steps = self.batch_size
+        final_rewards = 0.0
+        final_lengths = 0.0
+        final_success = 0.0
 
         while self.test_steps < self.max_test_steps:
             self.play_test_steps()
@@ -604,6 +611,9 @@ class PPO_Track(object):
             mean_rewards = self.episode_test_rewards.get_mean()
             mean_lengths = self.episode_test_lengths.get_mean()
             mean_success = self.episode_test_success.get_mean()
+            final_rewards = mean_rewards
+            final_lengths = mean_lengths
+            final_success = mean_success
             print("## Sample Length %d ##" % len(self.episode_test_rewards))
             print("mean_rewards: ", mean_rewards)
             print("mean_lengths: ", mean_lengths)
@@ -612,6 +622,13 @@ class PPO_Track(object):
             #     'metrics/episode_test_rewards': mean_rewards,
             #     'metrics/episode_test_lengths': mean_lengths,
             # }, step=self.agent_steps)
+
+        # 每次测试结束后，额外输出一段汇总信息，方便直接看最终成功率。
+        print("==== Final Test Summary ====")
+        print("final_mean_rewards: ", final_rewards)
+        print("final_mean_lengths: ", final_lengths)
+        print("final_mean_success: ", final_success)
+        print("final_success_rate: {:.2f}%".format(final_success * 100.0))
 
     def adjust_learning_rate_cos(self, epoch):
         lr = self.init_lr * 0.5 * (

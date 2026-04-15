@@ -20,27 +20,27 @@ ppo:
   normalize_advantage: True # 是否对 advantage 做标准化
   gamma: 0.99 # 折扣因子：越接近 1，越重视长期回报
   tau: 0.95 # GAE 的 lambda（这里变量名写成 tau）
-  learning_rate: 5e-4 # Adam 学习率
-  lr_schedule: kl # 学习率调度策略：'fixed' | 'linear' | 'kl' | 'cos'
+  learning_rate: 1e-4 # Adam 学习率；当前 tidybot Tracking 先降一点，避免更新过猛
+  lr_schedule: linear # 学习率调度策略：'fixed' | 'linear' | 'kl' | 'cos'；先不用 kl 自适应，减少学习率异常抬高
   kl_threshold: 0.016 # 当 lr_schedule=kl 时，用 KL 散度动态调学习率的阈值
   save_best_after: 500 # 训练多少步之后才开始保存 best 模型
   save_frequency: 2000 # 每隔多少 agent steps 保存一次 last 模型
   grad_norm: 1.0 # 梯度裁剪上限，防止梯度爆炸
-  entropy_coef: 0.001 # 先给一点探索奖励，避免策略过早卡在局部最优
+  entropy_coef: 0 # 先给一点探索奖励，避免策略过早卡在局部最优
   freeze_base: False # 是否冻结底盘相关参数（当前一般不冻结）
   freeze_arm: False # 是否冻结机械臂相关参数（当前一般不冻结）
   truncate_grads: True # 是否启用梯度裁剪
   e_clip: 0.2 # PPO clip 系数，限制新旧策略变化过大
-  action_track_denorm: [1.5, 0.025, 0.01] # Tracking 动作反归一化系数：底盘 / 末端 / 手
+  action_track_denorm: [1.5, 0.015, 0.01] # Tracking 动作反归一化系数：底盘速度 / 7关节增量 / 夹爪占位量；适当减小关节动作幅度
   # action_catch_denorm: [0.25, 0.01, 0.15] # 1.5 for the base action, 0.025 for the end-effector action, 0.15 for the hand action
   action_catch_denorm: [1.5, 0.025, 0.15] # Catching 动作反归一化系数
   horizon_length: 64 # 每个并行环境一次采样多少步
-  minibatch_size: 256 # 把一轮 batch=512 切成 2 个 mini-batch，训练更稳定一些
+  minibatch_size: 64 # 把一轮 batch=512 切成 2 个 mini-batch，训练更稳定一些
   mini_epochs: 4 # 同一批采样数据重复训练多少轮
   critic_coef: 4 # critic loss 的权重
   clip_value: True # 是否对 value 目标做截断式更新
   bounds_loss_coef: 0.0001 # 动作边界约束损失系数
-  max_agent_steps: 2000000 # 第一阶段先提高训练步数，优先验证“训练量不够”是否是主要瓶颈
+  max_agent_steps: 10000000 # 延长 tracking 训练总步数到一千万
   test_num_episodes: 100 # 测试时跑多少个 episode
   max_test_steps: 10000 # 单次测试最多运行多少环境步
   img_dim: [112, 112] # 如果用图像观测，图像尺寸
