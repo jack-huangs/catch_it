@@ -20,8 +20,8 @@ ppo:
   normalize_advantage: True # 是否对 advantage 做标准化
   gamma: 0.99 # 折扣因子：越接近 1，越重视长期回报
   tau: 0.95 # GAE 的 lambda（这里变量名写成 tau）
-  learning_rate: 2e-4 # Adam 学习率；当前 tidybot Tracking 先降一点，避免更新过猛
-  lr_schedule: linear # 学习率调度策略：'fixed' | 'linear' | 'kl' | 'cos'；先不用 kl 自适应，减少学习率异常抬高
+  learning_rate: 1e-4 # Adam 学习率；当前 tidybot Tracking 先降一点，避免更新过猛
+  lr_schedule: kl # 学习率调度策略：'fixed' | 'linear' | 'kl' | 'cos'；先不用 kl 自适应，减少学习率异常抬高
   kl_threshold: 0.016 # 当 lr_schedule=kl 时，用 KL 散度动态调学习率的阈值
   save_best_after: 500 # 训练多少步之后才开始保存 best 模型
   save_frequency: 2000 # 每隔多少 agent steps 保存一次 last 模型
@@ -40,7 +40,7 @@ ppo:
   critic_coef: 4 # critic loss 的权重
   clip_value: True # 是否对 value 目标做截断式更新
   bounds_loss_coef: 0.0001 # 动作边界约束损失系数
-  max_agent_steps: 10000000 # 延长 tracking 训练总步数到一千万
+  max_agent_steps: 6000000 # 延长 tracking 训练总步数到一千万
   test_num_episodes: 100 # 测试时跑多少个 episode
   max_test_steps: 10000 # 单次测试最多运行多少环境步
   img_dim: [112, 112] # 如果用图像观测，图像尺寸

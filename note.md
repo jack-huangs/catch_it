@@ -2,7 +2,7 @@
 
 ## 1. 项目一句话
 
-这是一个基于 MuJoCo 的机器人强化学习项目。  
+这是一个基于 MuJoCo 的机器人强化学习项目。
 环境负责抛出 `object`、推进物理仿真并计算奖励；策略网络负责根据观测输出动作；PPO 根据采样轨迹不断更新策略，让机器人学会完成任务。
 
 我当前只关注：
@@ -143,8 +143,7 @@ MuJoCo 执行 ctrl
 
 ### 和旧版本的区别
 
-旧机器人更依赖 `IK + PID`。  
-现在 tidybot Tracking 先采用更直接的关节空间控制思路：
+旧机器人更依赖 `IK + PID`。现在 tidybot Tracking 先采用更直接的关节空间控制思路：
 
 - 底盘：目标平面位姿/速度控制
 - 手臂：7 个关节增量控制
@@ -253,7 +252,7 @@ episode\_reward = r_0 + r_1 + r_2 + \cdots + r_T
 
 ### return
 
-从某一步开始往后的累计回报目标。  
+从某一步开始往后的累计回报目标。
 每一步都有一个 `return_t`。
 
 它主要用于：
@@ -329,8 +328,7 @@ return_t = A_t + V(s_t)
 
 ### 当前设计思想
 
-Tracking 现在不再依赖显式接触奖励 `r_touch`。  
-主要靠：
+Tracking 现在不再依赖显式接触奖励 `r_touch`。主要靠：
 
 - 靠近目标
 - 进入近距离区域
@@ -432,45 +430,57 @@ Tracking 现在不再依赖显式接触奖励 `r_touch`。
 
 ## 15. 常见缩写表
 
-| 缩写 | 中文意思 |
-| --- | --- |
-| `obs` | 观测 |
-| `act` | 动作 |
-| `env` | 环境 |
-| `ppo` | PPO 强化学习算法 |
-| `rl` | 强化学习 |
-| `ee` | 末端执行器 |
-| `pos` | 位置 |
-| `quat` | 四元数 |
-| `v` | 速度 |
-| `lin` | 线性 |
-| `2d` | 二维 |
-| `3d` | 三维 |
-| `v_lin_2d` | 二维线速度 |
-| `v_lin_3d` | 三维线速度 |
-| `ee_pos3d` | 末端三维位置 |
-| `ee_quat` | 末端姿态四元数 |
-| `ee_v_lin_3d` | 末端三维线速度 |
-| `joint_pos` | 关节位置/关节角 |
-| `ctrl` | 控制量 |
-| `done` | 回合结束 |
-| `terminated` | 失败结束 |
-| `truncated` | 正常截断结束 |
-| `mu` | 均值 |
-| `sigma` | 标准差 |
-| `value` | 状态价值 |
-| `advantage` | 优势函数 |
-| `return` | 回报 |
-| `kl` | KL 散度 |
-| `lr` | 学习率 |
-| `ik` | 逆运动学 |
-| `pid` | PID 控制 |
-| `qpos` | MuJoCo 中的广义位置 |
-| `qvel` | MuJoCo 中的广义速度 |
+| 缩写            | 中文意思            |
+| --------------- | ------------------- |
+| `obs`         | 观测                |
+| `act`         | 动作                |
+| `env`         | 环境                |
+| `ppo`         | PPO 强化学习算法    |
+| `rl`          | 强化学习            |
+| `ee`          | 末端执行器          |
+| `pos`         | 位置                |
+| `quat`        | 四元数              |
+| `v`           | 速度                |
+| `lin`         | 线性                |
+| `2d`          | 二维                |
+| `3d`          | 三维                |
+| `v_lin_2d`    | 二维线速度          |
+| `v_lin_3d`    | 三维线速度          |
+| `ee_pos3d`    | 末端三维位置        |
+| `ee_quat`     | 末端姿态四元数      |
+| `ee_v_lin_3d` | 末端三维线速度      |
+| `joint_pos`   | 关节位置/关节角     |
+| `ctrl`        | 控制量              |
+| `done`        | 回合结束            |
+| `terminated`  | 失败结束            |
+| `truncated`   | 正常截断结束        |
+| `mu`          | 均值                |
+| `sigma`       | 标准差              |
+| `value`       | 状态价值            |
+| `advantage`   | 优势函数            |
+| `return`      | 回报                |
+| `kl`          | KL 散度             |
+| `lr`          | 学习率              |
+| `ik`          | 逆运动学            |
+| `pid`         | PID 控制            |
+| `qpos`        | MuJoCo 中的广义位置 |
+| `qvel`        | MuJoCo 中的广义速度 |
 
 ---
 
 ## 16. 我现在最该关注什么
+
+
+
+tracking_object_high_height = np.array([1.05, 1.45])#球出生高度
+
+tracking_object_forward_speed = np.array([1.5, 2.2])  # 主要沿 -Y 飞向机器人
+
+tracking_object_lateral_speed = 0.05# 左右摆动
+
+tracking_object_vertical_speed = np.array([2.3, 2.8])
+
+
 
 当前最重要的不是继续加很多新功能，而是先回答这几个问题：
 
@@ -482,3 +492,11 @@ Tracking 现在不再依赖显式接触奖励 `r_touch`。
 一句话：
 
 先把 **tidybot Tracking 训起来并稳定提高成功率**，再考虑后续更复杂的任务。
+
+tracking_object_high_height = np.array([1.05, 1.45])#球出生高度
+
+tracking_object_forward_speed = np.array([1.5, 2.2])  # 主要沿 -Y 飞向机器人
+
+tracking_object_lateral_speed = 0.05# 左右摆动
+
+tracking_object_vertical_speed = np.array([2.3, 2.8])

@@ -156,9 +156,9 @@ tracking_object_x_range = np.array([-0.15, 0.15])#表示球在 左右方向 的�
 tracking_object_y_range = np.array([2.2, 2.45])#表示球在 前后方向 的出生范围
 tracking_object_low_height = np.array([0.85, 1.05])#球出生高度
 tracking_object_high_height = np.array([1.05, 1.45])#球出生高度
-tracking_object_forward_speed = np.array([1.5, 2.2])  # 主要沿 -Y 飞向机器人
+tracking_object_forward_speed = np.array([1.4, 2.5])  # 主要沿 -Y 飞向机器人
 tracking_object_lateral_speed = 0.05                  # 左右摆动
-tracking_object_vertical_speed = np.array([2.3, 2.8])
+tracking_object_vertical_speed = np.array([2.2, 3])
 
 ## 观测噪声：模拟传感器误差
 k_obs_base = 0.01
