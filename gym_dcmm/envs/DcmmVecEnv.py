@@ -613,6 +613,8 @@ class DcmmVecEnv(gym.Env):
         self.object_pos3d = np.array([x, y, height])
         self.object_vel6d = np.array([v_lin_x, v_lin_y, v_lin_z, 0.0, 0.0, 0.0])
         # Random Static Time
+        # 当前 Tracking 任务把 object_static_time 设成 0，
+        # 这样球的抛出和机器人动作会在同一时刻开始。
         self.object_static_time = np.random.uniform(DcmmCfg.object_static[0], DcmmCfg.object_static[1])
         # Random Quaternion
         r_obj_quat = R.from_euler('xyz', [0, np.random.rand()*1*math.pi, 0], degrees=False)

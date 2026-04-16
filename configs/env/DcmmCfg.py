@@ -68,7 +68,7 @@ pad_geom_names = ["right_pad1", "right_pad2", "left_pad1", "left_pad2"]
 ## 这些值会在环境的 compute_reward() 里被用到
 ## ------------------------------
 reward_weights = {
-    "r_base_pos": 0.0,   # 底盘/机械臂基座接近目标的奖励权重
+    "r_base_pos": 1,   # 底盘/机械臂基座接近目标的奖励权重
     "r_ee_pos": 10.0,    # 末端接近目标的奖励权重：适当下调，减少“只靠接近刷分”
     "r_precision": 12.0, # 末端非常接近目标时的精细奖励：下调后避免 reward 与真实成功脱节
     "r_orient": 0.8,     # 姿态/朝向对准奖励：对 tidybot Tracking 只保留较弱引导
@@ -145,18 +145,20 @@ object_size = {
 }
 object_mass = np.array([0.035, 0.075])
 object_damping = np.array([5e-3, 2e-2])
-object_static = np.array([0.5, 0.75]) # 物体在真正被抛出前静止悬停的时间范围
+# Tracking 当前希望“球抛出”和“机器人开始响应”同步发生，
+# 因此把物体静止悬停时间设为 0，避免出现机器人先空追一段时间的现象。
+object_static = np.array([0.0, 0.0]) # 物体在真正被抛出前静止悬停的时间范围
 
 # tidybot Tracking 的“来球走廊”：
 # 让物体主要从机器人正前方 (+Y) 飞来，只保留少量左右偏移，
 # 这样更符合“机器人面对来球”的训练设定。
-tracking_object_x_range = np.array([-0.15, 0.15])
-tracking_object_y_range = np.array([2.2, 2.45])
-tracking_object_low_height = np.array([0.85, 1.05])
-tracking_object_high_height = np.array([1.05, 1.45])
-tracking_object_forward_speed = np.array([1.2, 1.8])  # 主要沿 -Y 飞向机器人
-tracking_object_lateral_speed = 0.15                  # 左右摆动只保留小量扰动
-tracking_object_vertical_speed = np.array([2.0, 2.4])
+tracking_object_x_range = np.array([-0.15, 0.15])#表示球在 左右方向 的出生范围
+tracking_object_y_range = np.array([2.2, 2.45])#表示球在 前后方向 的出生范围
+tracking_object_low_height = np.array([0.85, 1.05])#球出生高度
+tracking_object_high_height = np.array([1.05, 1.45])#球出生高度
+tracking_object_forward_speed = np.array([1.5, 2.2])  # 主要沿 -Y 飞向机器人
+tracking_object_lateral_speed = 0.05                  # 左右摆动
+tracking_object_vertical_speed = np.array([2.3, 2.8])
 
 ## 观测噪声：模拟传感器误差
 k_obs_base = 0.01
