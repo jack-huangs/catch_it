@@ -15,8 +15,8 @@ ppo:
   normalize_value: True # 是否对 value / return 做标准化
   value_bootstrap: True # 轨迹末尾是否用最后状态的 value 做 bootstrap
   num_actors: ${resolve_default:1,${...num_envs}} # 并行环境数，通常等于 num_envs
-  reward_scale_value: 0.1 # 对环境 reward 的整体缩放系数
-  clip_value_loss: False # 是否对 critic 的 value loss 也做 clip
+  reward_scale_value: 0.1 # 对环境 reward 的整afasdfasd
+  clip_value_loss: False # 是否对 critic 的 value loss 也做 clipxminx
   normalize_advantage: True # 是否对 advantage 做标准化
   gamma: 0.99 # 折扣因子：越接近 1，越重视长期回报
   tau: 0.95 # GAE 的 lambda（这里变量名写成 tau）
@@ -40,7 +40,7 @@ ppo:
   critic_coef: 4 # critic loss 的权重
   clip_value: True # 是否对 value 目标做截断式更新
   bounds_loss_coef: 0.0001 # 动作边界约束损失系数
-  max_agent_steps: 6000000 # 延长 tracking 训练总步数到一千万
+  max_agent_steps: 15000000 # 延长 tracking 训练总步数到一千万
   test_num_episodes: 100 # 测试时跑多少个 episode
   max_test_steps: 10000 # 单次测试最多运行多少环境步
   img_dim: [112, 112] # 如果用图像观测，图像尺寸
