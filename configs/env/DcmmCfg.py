@@ -104,9 +104,9 @@ cam_config = {
 ## ------------------------------
 vision_config = {
     "use_visual_object_state": True,
-    # 当前训练先只信视觉位置，不直接把视觉速度喂给 PPO。
-    # 因为位置误差已经到可用范围，但速度误差还偏大。
-    "use_visual_object_velocity": False,
+    # 当前正式训练切到“纯视觉物体状态”：
+    # PPO 同时接收视觉位置和视觉速度。
+    "use_visual_object_velocity": True,
     "camera_name": "base",
     "min_depth": 0.1,
     "max_depth": 8.0,
