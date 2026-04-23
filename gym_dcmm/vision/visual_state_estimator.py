@@ -2,7 +2,7 @@ import numpy as np
 
 from .detector import RedObjectDetector
 from .depth_projector import DepthProjector
-from .tracker3d import ConstantVelocityKalman3D
+from .tracker3d import GravityKalman3D
 
 
 class VisualStateEstimator:
@@ -17,7 +17,7 @@ class VisualStateEstimator:
         self.camera_name = camera_name
         self.detector = RedObjectDetector()
         self.projector = DepthProjector(min_depth=min_depth, max_depth=max_depth)
-        self.tracker = ConstantVelocityKalman3D()
+        self.tracker = GravityKalman3D()
         self.last_valid = None
 
     def reset(self):
@@ -25,7 +25,7 @@ class VisualStateEstimator:
         每次 episode reset 时，把视觉跟踪器也一起清空。
         否则上一回合的 Kalman 内部速度会“串到”下一回合。
         """
-        self.tracker = ConstantVelocityKalman3D()
+        self.tracker = GravityKalman3D()
         self.last_valid = None
 
     def update(self, dcmm, rgb_image, depth_image, timestamp):
