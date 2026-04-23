@@ -16,6 +16,7 @@ import gymnasium as gym
 import gym_dcmm
 import datetime
 import pytz
+import configs.env.DcmmCfg as DcmmCfg
 # os.environ['MUJOCO_GL'] = 'egl'
 # 注册 Hydra 里的自定义解析器：
 # 如果用户没传实验名，就使用默认名字；否则使用传入值。
@@ -45,19 +46,33 @@ def main(config: DictConfig):
     config.seed = random.seed(config.seed)
 
     cprint('Start Building the Environment', 'green', attrs=['bold'])
+    # 如果已经启用“视觉版 object 观测”，渲染和调试时也优先跟随视觉相机；
+    # 否则仍按普通相机配置走。
+    env_camera_names = [DcmmCfg.vision_config["camera_name"]] \
+        if DcmmCfg.vision_config.get("use_visual_object_state", False) \
+        else [DcmmCfg.cam_config["name"]]
+    # 测试并且需要弹出相机画面时，同时显示：
+    # 1. 最新改好的 base 相机
+    # 2. 机械臂末端 wrist 相机
+    # 这样你在测试时可以一边看大画面，一边看两个相机视角。
+    if config.test and config.imshow_cam:
+        env_camera_names = ["base", "wrist"]
     # 创建并行环境。
     # 注意：环境层只区分 Tracking / Catching，TwoStage 和 OneStage 的差异在 PPO agent 里。
     env_name = 'gym_dcmm/DcmmVecWorld-v0'
     task = 'Tracking' if config.task == 'Tracking' else 'Catching'
     print("config.num_envs: ", config.num_envs)
     env = gym.make_vec(env_name, num_envs=int(config.num_envs), 
-                    # tidybot 原生带 wrist 相机；Tracking 先统一使用它
-                    task=task, camera_name=["wrist"],
+                    # 训练环境真正给 PPO 的 object 状态是否来自视觉，
+                    # 由 DcmmVecEnv 内部的 vision_config 决定；
+                    # 这里的 camera_name 主要用于渲染/调试显示。
+                    task=task, camera_name=env_camera_names,
                     render_per_step=False, render_mode = "rgb_array",
                     object_name = "object",
                     img_size = config.train.ppo.img_dim,
                     imshow_cam = config.imshow_cam, 
                     viewer = config.viewer,
+                    viewer_sleep = config.test_viewer_sleep if config.test else 0.03,
                     print_obs = False, print_info = False,
                     print_reward = False, print_ctrl = False,
                     print_contacts = False, object_eval = config.object_eval,

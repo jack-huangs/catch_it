@@ -12,6 +12,18 @@ device_id: 0 # GPU 编号；如 cuda:0。设为 -1 表示使用 CPU
 # 是否打开 MuJoCo 可视化窗口 / 相机图像显示
 viewer: False
 imshow_cam: False
+# 测试时 viewer 每步额外停留多久；数值越大，画面越慢
+test_viewer_sleep: 0.08
+# 是否在测试时保存视频
+save_test_videos: False
+# 最多保存前多少个测试 episode 视频
+test_video_episodes: 8
+# 测试视频保存帧率
+test_video_fps: 60
+# 是否在测试时打印“视觉估计 vs MuJoCo真值”的对比信息
+debug_visual_compare: False
+# 每隔多少个测试 step 打印一次视觉对比
+debug_visual_compare_interval: 10
 # 强化学习运行模式
 test: False # False 表示训练；True 表示测试/推理
 task: Tracking # 任务类型：Tracking / Catching_TwoStage / Catching_OneStage

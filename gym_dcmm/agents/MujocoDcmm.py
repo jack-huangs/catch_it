@@ -490,8 +490,20 @@ class MJ_DCMM(object):
             camera: Name of camera used to obtain the image.
         """
 
-        if not self.cam_init:
+        # 之前这里只在第一次调用时初始化相机参数。
+        # 现在项目里会同时用 wrist / base 等不同相机，
+        # 所以只要 camera 变了，就必须重新计算对应相机的内外参。
+        if (not self.cam_init) or (getattr(self, "cam_name", None) != camera):
             self.create_camera_data(DcmmCfg.cam_config["width"], DcmmCfg.cam_config["height"], camera)
+
+        # 对于 targetbody / tracking 等动态相机，外参不是 XML 里的静态 cam_mat0，
+        # 而应该使用 MuJoCo 在当前时刻算出来的真实世界位姿。
+        # 否则只要相机朝向发生变化，深度反投影出来的 3D 坐标就会整体偏掉。
+        cam_id = self.model.camera(camera).id
+        self.cam_rot_mat = np.reshape(self.data.cam_xmat[cam_id], (3, 3)) @ np.array(
+            [[1, 0, 0], [0, 0, 1], [0, -1, 0]]
+        )
+        self.cam_pos = self.data.cam_xpos[cam_id]
 
         # 先把像素点从图像坐标还原到相机坐标系
         pixel_coord = np.array([pixel_x, 
@@ -532,16 +544,15 @@ class MJ_DCMM(object):
         f = 0.5 * height / np.tan(fovy * np.pi / 360)
         # 相机内参矩阵 K
         self.cam_matrix = np.array(((f, 0, width / 2), (0, f, height / 2), (0, 0, 1)))
-        # 相机旋转矩阵：把相机坐标系方向转到世界坐标系方向
-        self.cam_rot_mat = self.model.cam_mat0[cam_id]
-        self.cam_rot_mat = np.reshape(self.cam_rot_mat, (3, 3)) @ np.array([[1, 0, 0], [0, 0, 1], [0, -1, 0]])
-        # 相机在世界坐标系中的位置
+        # 外参（cam_rot_mat / cam_pos）对动态相机需要每次实时刷新，
+        # 所以这里只先做初始化占位，真正值在 pixel_2_world() 里按当前 data 更新。
+        self.cam_rot_mat = np.eye(3)
         if self.use_tidybot:
-            # tidybot 直接使用 MuJoCo 当前计算出的相机世界坐标，避免旧模型里的 arm_base 偏移假设
             self.cam_pos = self.data.cam_xpos[cam_id]
         else:
             self.cam_pos = self.model.cam_pos0[cam_id] + self.data.body("base_link").xpos - self.data.body("arm_base").xpos
         self.cam_init = True
+        self.cam_name = camera
 
     def set_arm_target_qpos(self, delta_qpos):
         """

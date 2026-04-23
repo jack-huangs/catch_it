@@ -20,6 +20,7 @@ import mujoco.viewer
 import gymnasium as gym
 from gymnasium import spaces
 from gym_dcmm.agents.MujocoDcmm import MJ_DCMM
+from gym_dcmm.vision.visual_state_estimator import VisualStateEstimator
 from gym_dcmm.utils.ik_pkg.ik_base import IKBase
 import copy
 from termcolor import colored
@@ -191,6 +192,25 @@ class DcmmVecEnv(gym.Env):
         self.mujoco_renderer = MujocoRenderer(
             self.Dcmm.model, self.Dcmm.data
         )
+        # 测试录像使用单独的离屏渲染器：
+        # 优先复刻 viewer 当前看到的“大画面”自由视角，而不是机器人身上的命名相机画面。
+        self.record_width = DcmmCfg.cam_config["width"]
+        self.record_height = DcmmCfg.cam_config["height"]
+        self.record_renderer = None
+        # 视觉版物体观测：
+        # PPO 不再直接吃 MuJoCo 的物体真值，而是走：
+        # base 相机 RGB-D -> 检测 -> 深度反投影 -> 3D 跟踪
+        self.use_visual_object_state = bool(DcmmCfg.vision_config.get("use_visual_object_state", False))
+        self.use_visual_object_velocity = bool(DcmmCfg.vision_config.get("use_visual_object_velocity", True))
+        self.visual_camera_name = DcmmCfg.vision_config.get("camera_name", "base")
+        self.visual_fallback_to_ground_truth = bool(DcmmCfg.vision_config.get("fallback_to_ground_truth", False))
+        self.visual_estimator = None
+        if self.use_visual_object_state:
+            self.visual_estimator = VisualStateEstimator(
+                camera_name=self.visual_camera_name,
+                min_depth=DcmmCfg.vision_config.get("min_depth", 0.1),
+                max_depth=DcmmCfg.vision_config.get("max_depth", 8.0),
+            )
         if self.Dcmm.open_viewer:
             if self.Dcmm.viewer:
                 print("Close the previous viewer")
@@ -261,6 +281,10 @@ class DcmmVecEnv(gym.Env):
         self.prev_obj_pos3d = np.array([0.0, 0.0, 0.0])
         self.prev_ee_pos3d[:] = self.initial_ee_pos3d[:] 
         self.prev_obj_pos3d[:] = self.initial_obj_pos3d[:]
+        # 调试视觉链路时，缓存最近一次“视觉估计 / 真值 / 误差”，供外部测试脚本读取。
+        self.last_visual_object_state = None
+        self.last_gt_object_state = None
+        self.last_visual_compare_info = None
 
         # 动作空间也是字典：
         # base 控底盘速度，arm 控末端位姿增量，hand 控手指关节
@@ -455,6 +479,114 @@ class DcmmVecEnv(gym.Env):
         object_v_lin_y = -math.sin(base_yaw) * (global_object_v_lin[0]-base_vel[0]) + math.cos(base_yaw) * (global_object_v_lin[1]-base_vel[1])
         return np.array([object_v_lin_x, object_v_lin_y, global_object_v_lin[2]-base_vel[2]])
 
+    def _ensure_visual_estimator(self):
+        """
+        即使 PPO 当前没有真正使用视觉观测，
+        调试时也允许单独跑一遍视觉链路来做“视觉 vs 真值”对比。
+        """
+        if self.visual_estimator is None:
+            self.visual_estimator = VisualStateEstimator(
+                camera_name=self.visual_camera_name,
+                min_depth=DcmmCfg.vision_config.get("min_depth", 0.1),
+                max_depth=DcmmCfg.vision_config.get("max_depth", 8.0),
+            )
+        return self.visual_estimator
+
+    def _world_pos_to_relative_object_pos3d(self, world_pos3d):
+        """
+        把视觉模块估计到的世界坐标，转成 PPO 当前使用的“相对底盘坐标”。
+        这样策略侧不用改输入定义。
+        """
+        base_body = self.Dcmm.data.body(self.Dcmm.arm_base_body_name)
+        base_yaw = quat2theta(self.Dcmm.data.body("base_link").xquat[0], self.Dcmm.data.body("base_link").xquat[3])
+        x, y = relative_position(base_body.xpos[0:2], world_pos3d[0:2], base_yaw)
+        return np.array([x, y, world_pos3d[2] - base_body.xpos[2]], dtype=np.float32)
+
+    def _world_vel_to_relative_object_v_lin_3d(self, world_v_lin_3d):
+        """
+        把视觉估计得到的世界速度，转成相对底盘坐标系下的速度。
+        """
+        base_vel = self.Dcmm.data.body(self.Dcmm.arm_base_body_name).cvel[3:6]
+        base_yaw = quat2theta(self.Dcmm.data.body("base_link").xquat[0], self.Dcmm.data.body("base_link").xquat[3])
+        object_v_lin_x = math.cos(base_yaw) * (world_v_lin_3d[0]-base_vel[0]) + math.sin(base_yaw) * (world_v_lin_3d[1]-base_vel[1])
+        object_v_lin_y = -math.sin(base_yaw) * (world_v_lin_3d[0]-base_vel[0]) + math.cos(base_yaw) * (world_v_lin_3d[1]-base_vel[1])
+        return np.array([object_v_lin_x, object_v_lin_y, world_v_lin_3d[2]-base_vel[2]], dtype=np.float32)
+
+    def _render_visual_object_camera(self):
+        """
+        单独从视觉相机渲染 RGB-D。
+        这里不走 env.render()，因为 env.render() 主要服务显示；
+        视觉估计需要固定使用 base 相机，并且同时拿到 RGB 和 depth。
+        """
+        rgb_img = self.mujoco_renderer.render("rgb_array", camera_name=self.visual_camera_name)
+        depth_img = self.mujoco_renderer.render("depth_array", camera_name=self.visual_camera_name)
+        depth_img = self.Dcmm.depth_2_meters(depth_img)
+        return rgb_img, depth_img
+
+    def _get_visual_object_state(self):
+        """
+        用视觉链路估计物体 3D 状态。
+        返回值格式和当前 PPO 观测保持一致：
+        - pos3d: 相对底盘的 3D 位置
+        - v_lin_3d: 相对底盘的 3D 线速度
+        """
+        self._ensure_visual_estimator()
+        rgb_img, depth_img = self._render_visual_object_camera()
+        estimate = self.visual_estimator.update(self.Dcmm, rgb_img, depth_img, self.Dcmm.data.time)
+        if estimate["valid"]:
+            return {
+                "valid": True,
+                "pos3d": self._world_pos_to_relative_object_pos3d(estimate["world_pos3d"]),
+                "v_lin_3d": self._world_vel_to_relative_object_v_lin_3d(estimate["world_v_lin_3d"]),
+            }
+
+        if self.visual_fallback_to_ground_truth:
+            # 调试阶段可临时退回真值，便于确认视觉链路以外部分都正常。
+            return {
+                "valid": False,
+                "pos3d": self._get_relative_object_pos3d().astype(np.float32),
+                "v_lin_3d": self._get_relative_object_v_lin_3d().astype(np.float32),
+            }
+
+        # 没检测到目标时，不偷偷给真值，直接返回零向量。
+        # 这更接近真实机器人里“当前视觉丢失目标”的情况。
+        return {
+            "valid": False,
+            "pos3d": np.zeros(3, dtype=np.float32),
+            "v_lin_3d": np.zeros(3, dtype=np.float32),
+        }
+
+    def _update_visual_compare_cache(self, visual_object_state):
+        """
+        把最近一次视觉估计结果和 MuJoCo 真值一起缓存起来。
+        这样测试时打印 debug 信息，就不需要再重复跑一次检测器/跟踪器。
+        """
+        gt_object_state = {
+            "pos3d": self._get_relative_object_pos3d().astype(np.float32),
+            "v_lin_3d": self._get_relative_object_v_lin_3d().astype(np.float32),
+        }
+        pos_error = float(np.linalg.norm(visual_object_state["pos3d"] - gt_object_state["pos3d"]))
+        vel_error = float(np.linalg.norm(visual_object_state["v_lin_3d"] - gt_object_state["v_lin_3d"]))
+        self.last_visual_object_state = {
+            "valid": bool(visual_object_state.get("valid", False)),
+            "pos3d": np.asarray(visual_object_state["pos3d"], dtype=np.float32).copy(),
+            "v_lin_3d": np.asarray(visual_object_state["v_lin_3d"], dtype=np.float32).copy(),
+        }
+        self.last_gt_object_state = {
+            "pos3d": gt_object_state["pos3d"].copy(),
+            "v_lin_3d": gt_object_state["v_lin_3d"].copy(),
+        }
+        self.last_visual_compare_info = {
+            "valid": bool(visual_object_state.get("valid", False)),
+            "vision_pos3d": self.last_visual_object_state["pos3d"].copy(),
+            "gt_pos3d": self.last_gt_object_state["pos3d"].copy(),
+            "pos_error": pos_error,
+            "vision_v_lin_3d": self.last_visual_object_state["v_lin_3d"].copy(),
+            "gt_v_lin_3d": self.last_gt_object_state["v_lin_3d"].copy(),
+            "vel_error": vel_error,
+            "time": float(self.Dcmm.data.time),
+        }
+
     def _get_obs(self):
         # 这里不是“执行动作”的地方，而是“动作执行完以后，把新的物理状态读出来”
         # step() 里先调用 _step_mujoco_simulation(action) 执行动作，
@@ -463,7 +595,25 @@ class DcmmVecEnv(gym.Env):
         # 读取末端和物体在相对坐标系下的位置
         # 这些值已经反映了“刚才动作执行之后”的最新状态
         ee_pos3d = self._get_relative_ee_pos3d()
-        obj_pos3d = self._get_relative_object_pos3d()
+        if self.use_visual_object_state:
+            # 视觉模式下，object 观测来自相机估计，而不是仿真真值。
+            visual_object_state = self._get_visual_object_state()
+            self._update_visual_compare_cache(visual_object_state)
+            obj_pos3d = visual_object_state["pos3d"]
+            if self.use_visual_object_velocity:
+                obj_v_lin_3d = visual_object_state["v_lin_3d"]
+            else:
+                # 当前训练先不把视觉速度喂给 PPO，避免大速度误差干扰策略学习。
+                obj_v_lin_3d = np.zeros(3, dtype=np.float32)
+        else:
+            obj_pos3d = self._get_relative_object_pos3d()
+            obj_v_lin_3d = (obj_pos3d - self.prev_obj_pos3d)*self.fps
+            self.last_visual_object_state = None
+            self.last_gt_object_state = {
+                "pos3d": self._get_relative_object_pos3d().astype(np.float32),
+                "v_lin_3d": self._get_relative_object_v_lin_3d().astype(np.float32),
+            }
+            self.last_visual_compare_info = None
 
         # reset 后第一次取观测时，还没有“上一帧位置”
         # 所以先把 prev_* 初始化成当前值，避免后面速度差分异常
@@ -471,6 +621,8 @@ class DcmmVecEnv(gym.Env):
             self.prev_ee_pos3d[:] = ee_pos3d[:]
             self.prev_obj_pos3d[:] = obj_pos3d[:]
             self.init_pos = False
+            if not self.use_visual_object_state:
+                obj_v_lin_3d = np.zeros(3, dtype=np.float32)
 
         # 把当前时刻的机器人/物体状态整理成策略网络要看的 obs 字典
         # 同时加入少量高斯噪声，模拟真实传感器误差，提高训练鲁棒性
@@ -495,10 +647,9 @@ class DcmmVecEnv(gym.Env):
             "object": {
                 # 物体位置（相对坐标）
                 "pos3d": obj_pos3d + np.random.normal(0, self.k_obs_object, 3),
-                # "v_lin_3d": self._get_relative_object_v_lin_3d() + np.random.normal(0, self.k_obs_object, 3),
-                # 物体速度同样用相邻两帧的位置差分近似
-                # 所以它也反映了动作执行后、物体在这一小段时间里的运动变化
-                "v_lin_3d": (obj_pos3d - self.prev_obj_pos3d)*self.fps + np.random.normal(0, self.k_obs_object, 3),
+                # 视觉模式：速度来自 Kalman 跟踪器
+                # 非视觉模式：速度来自相邻两帧位置差分
+                "v_lin_3d": obj_v_lin_3d + np.random.normal(0, self.k_obs_object, 3),
             },
         }
         # 当前帧观测组装完后，把当前位置保存起来，供下一步差分速度使用
@@ -720,6 +871,11 @@ class DcmmVecEnv(gym.Env):
         self.reward_touch = 0
         self.reward_stability = 0
 
+        # 视觉状态估计器也要随着 episode 一起 reset，
+        # 否则上一回合的速度估计会污染下一回合。
+        if self.visual_estimator is not None:
+            self.visual_estimator.reset()
+
         self.info = {
             "ee_distance": np.linalg.norm(self._ee_world_pos() - 
                                        self.Dcmm.data.body(self.Dcmm.object_name).xpos[0:3]),
@@ -805,7 +961,13 @@ class DcmmVecEnv(gym.Env):
         # tidybot 的 Tracking 更希望“夹爪末端朝向”和“飞来物体速度方向”一致
         rotation_matrix = quaternion_to_rotation_matrix(obs["arm"]["ee_quat"])
         gripper_forward_axis = rotation_matrix @ np.array([0.0, 0.0, -1.0])
-        object_velocity = obs["object"]["v_lin_3d"]
+        # 姿态奖励只是在 sim 里做训练引导，不一定要和 PPO 观测完全一致。
+        # 当视觉速度暂时关闭时，仍使用仿真真值速度来计算姿态奖励，
+        # 这样可以保留“夹爪朝来球方向对准”的 shaping。
+        if self.use_visual_object_state and not self.use_visual_object_velocity:
+            object_velocity = self._get_relative_object_v_lin_3d()
+        else:
+            object_velocity = obs["object"]["v_lin_3d"]
         reward_orient = max(cos_angle_between_vectors(object_velocity, gripper_forward_axis), 0.0) \
             * DcmmCfg.reward_weights["r_orient"]
         rewards = reward_base_pos + reward_ee_pos + reward_ee_precision + reward_close + reward_orient + reward_ctrl + reward_collision + reward_constraint + self.reward_touch
@@ -1006,7 +1168,61 @@ class DcmmVecEnv(gym.Env):
             imgs = imgs_depth
         return imgs
 
+    def _build_default_record_camera(self):
+        """
+        如果没有打开 viewer，就用一套固定的总览自由视角来录像。
+        这套视角偏斜上方，尽量接近测试时常看的“大画面”。
+        """
+        cam = mujoco.MjvCamera()
+        mujoco.mjv_defaultFreeCamera(self.Dcmm.model, cam)
+        cam.lookat[:] = np.array([0.55, 0.0, 0.55], dtype=np.float64)
+        cam.distance = 3.8
+        cam.azimuth = 132.0
+        cam.elevation = -18.0
+        return cam
+
+    def get_record_frame(self, camera_name=None):
+        """
+        给测试录像用的一帧 RGB 画面。
+        这里优先录制 viewer 当前看到的“大画面”自由视角；
+        如果没有 viewer，再退回固定的总览视角。
+        """
+        if self.record_renderer is None:
+            self.record_renderer = mujoco.Renderer(
+                self.Dcmm.model, self.record_height, self.record_width
+            )
+
+        if self.Dcmm.viewer is not None:
+            # 直接复用 viewer 当前自由相机参数，让录像内容和你屏幕上看到的大画面尽量一致。
+            cam = self.Dcmm.viewer.cam
+        else:
+            cam = self._build_default_record_camera()
+
+        self.record_renderer.update_scene(self.Dcmm.data, camera=cam)
+        return self.record_renderer.render()
+
+    def get_visual_debug_info(self):
+        """
+        返回最近一步缓存好的“视觉估计 vs 真值”对比信息。
+        如果当前 PPO 没有使用视觉输入，缓存可能为空；
+        这时就按当前时刻临时跑一遍视觉链路，再返回调试结果。
+        """
+        if self.last_visual_compare_info is None:
+            visual_object_state = self._get_visual_object_state()
+            self._update_visual_compare_cache(visual_object_state)
+        if self.last_visual_compare_info is None:
+            return None
+        info = {}
+        for k, v in self.last_visual_compare_info.items():
+            if isinstance(v, np.ndarray):
+                info[k] = v.copy()
+            else:
+                info[k] = v
+        return info
+
     def close(self):
+        if self.record_renderer is not None:
+            self.record_renderer.close()
         if self.mujoco_renderer is not None:
             self.mujoco_renderer.close()
         if self.Dcmm.viewer != None: self.Dcmm.viewer.close()

@@ -4,6 +4,8 @@ import time
 
 import numpy as np
 import mujoco
+import cv2
+import configs.env.DcmmCfg as DcmmCfg
 
 
 # 通过导入模块对象来覆写其中的 key_callback；
@@ -38,6 +40,27 @@ def print_controls():
     print("  space: reset")
     print("  esc: 退出")
     print("当前模式：默认隐藏 object，且不根据任务成功/失败自动 reset")
+    print("同时会弹出相机 RGB / Depth 窗口，方便观察 base 相机视角")
+
+
+def show_camera_views(env, camera_name):
+    """
+    在 teleop 过程中实时显示相机画面：
+    - RGB：方便直接看相机视角
+    - Depth：方便看深度是否正常
+    """
+    rgb = env.mujoco_renderer.render("rgb_array", camera_name=camera_name)
+    depth = env.mujoco_renderer.render("depth_array", camera_name=camera_name)
+    depth = env.Dcmm.depth_2_meters(depth)
+
+    rgb_bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+    cv2.imshow(f"{camera_name}_rgb", rgb_bgr)
+
+    depth_norm = np.zeros(depth.shape, dtype=np.uint8)
+    max_depth = max(float(np.max(depth)), 1e-6)
+    cv2.convertScaleAbs(depth, depth_norm, alpha=(255.0 / max_depth))
+    cv2.imshow(f"{camera_name}_depth", depth_norm)
+    cv2.waitKey(1)
 
 
 def teleop_key_callback(keycode):
@@ -116,6 +139,9 @@ def run_headless_smoke():
     用于无图形环境下的最小测试：
     只验证脚本能构建环境并执行几步，不打开 viewer。
     """
+    env_camera_names = [DcmmCfg.vision_config["camera_name"]] \
+        if DcmmCfg.vision_config.get("use_visual_object_state", False) \
+        else [DcmmCfg.cam_config["name"]]
     env = DcmmVecEnv(
         task="Tracking",
         object_name="object",
@@ -125,7 +151,7 @@ def run_headless_smoke():
         print_contacts=False,
         print_ctrl=False,
         print_obs=False,
-        camera_name=["wrist"],
+        camera_name=env_camera_names,
         render_mode="rgb_array",
         imshow_cam=False,
         viewer=False,
@@ -181,6 +207,9 @@ def main():
         run_headless_smoke()
         return
 
+    env_camera_names = [DcmmCfg.vision_config["camera_name"]] \
+        if DcmmCfg.vision_config.get("use_visual_object_state", False) \
+        else [DcmmCfg.cam_config["name"]]
     # 把环境里的 key_callback 替换成当前脚本的版本。
     env_mod.env_key_callback = teleop_key_callback
 
@@ -193,7 +222,7 @@ def main():
         print_contacts=False,
         print_ctrl=False,
         print_obs=False,
-        camera_name=["wrist"],
+        camera_name=env_camera_names,
         render_mode="rgb_array",
         imshow_cam=False,
         viewer=True,
@@ -205,6 +234,10 @@ def main():
     obs, info = env.reset()
     configure_manual_debug_mode(env, hide_object=not args.show_object)
     print_controls()
+    debug_camera_name = DcmmCfg.vision_config["camera_name"] \
+        if DcmmCfg.vision_config.get("use_visual_object_state", False) \
+        else DcmmCfg.cam_config["name"]
+    show_camera_views(env, debug_camera_name)
 
     try:
         while True:
@@ -217,6 +250,7 @@ def main():
                 reset_requested = False
                 arm_delta[:] = 0.0
                 hand_delta[:] = 0.0
+                show_camera_views(env, debug_camera_name)
                 continue
 
             # 纯手动调试模式下，不让训练任务的成功/失败标志影响下一步操控。
@@ -234,6 +268,7 @@ def main():
             hand_delta[:] = 0.0
 
             obs, reward, terminated, truncated, info = env.step(action_dict)
+            show_camera_views(env, debug_camera_name)
             # 手动调试时不自动 reset；即使发生了训练定义里的 done，也只清掉标志继续操控。
             if terminated or truncated:
                 env.terminated = False
@@ -241,6 +276,7 @@ def main():
 
             time.sleep(0.03)
     finally:
+        cv2.destroyAllWindows()
         env.close()
 
 

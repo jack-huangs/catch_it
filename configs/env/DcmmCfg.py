@@ -96,6 +96,27 @@ cam_config = {
 }
 
 ## ------------------------------
+## 视觉观测配置
+## 如果 use_visual_object_state=True：
+## PPO 将不再直接读取 MuJoCo 里的物体真值位置/速度，
+## 而是改成：
+## base 相机 RGB-D -> 红球检测 -> 深度反投影 -> 3D 跟踪
+## ------------------------------
+vision_config = {
+    "use_visual_object_state": True,
+    # 当前训练先只信视觉位置，不直接把视觉速度喂给 PPO。
+    # 因为位置误差已经到可用范围，但速度误差还偏大。
+    "use_visual_object_velocity": False,
+    "camera_name": "base",
+    "min_depth": 0.1,
+    "max_depth": 8.0,
+    # 当视觉暂时没检测到球时：
+    # False: 直接给 0，完全模拟真实感知缺失
+    # True: 临时退回仿真真值，便于前期调试链路
+    "fallback_to_ground_truth": False,
+}
+
+## ------------------------------
 ## 四轮底盘（双阿克曼 / 平行转向）运动学参数
 ## IKBase 会用到这些参数
 ## ------------------------------

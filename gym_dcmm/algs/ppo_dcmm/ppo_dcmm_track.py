@@ -4,6 +4,7 @@ import math
 import time
 import torch
 import torch.distributed as dist
+import cv2
 
 import wandb
 
@@ -61,6 +62,7 @@ class PPO_Track(object):
         self.output_dir = output_dif
         self.nn_dir = os.path.join(self.output_dir, 'nn')
         self.tb_dif = os.path.join(self.output_dir, 'tb')
+        self.test_video_dir = os.path.join(self.output_dir, 'test_videos')
         os.makedirs(self.nn_dir, exist_ok=True)
         os.makedirs(self.tb_dif, exist_ok=True)
         # ---- Optim ----
@@ -140,6 +142,16 @@ class PPO_Track(object):
         self.max_agent_steps = self.ppo_config['max_agent_steps']
         self.max_test_steps = self.ppo_config['max_test_steps']
         self.best_rewards = -10000
+        self.save_test_videos = bool(full_config.get('save_test_videos', False))
+        self.test_video_episodes = int(full_config.get('test_video_episodes', 8))
+        self.test_video_fps = int(full_config.get('test_video_fps', 20))
+        self.debug_visual_compare = bool(full_config.get('debug_visual_compare', False))
+        self.debug_visual_compare_interval = int(full_config.get('debug_visual_compare_interval', 10))
+        self.saved_test_videos = 0
+        self.test_video_frames = []
+        self.test_episode_index = 0
+        self.test_debug_step = 0
+        self.next_visual_debug_step = 0
         # ---- Timing
         self.data_collect_time = 0
         self.rl_train_time = 0
@@ -557,6 +569,8 @@ class PPO_Track(object):
     # 测试阶段和训练采样类似，但不会往 buffer 里存数据，也不会更新网络
     def play_test_steps(self):
         for _ in range(self.horizon_length):
+            if self.save_test_videos:
+                self.capture_test_frame()
             res_dict = self.model_act(self.obs, inference=True)
             # 测试时直接用策略均值动作，不做采样探索
             actions = res_dict['actions']
@@ -575,6 +589,13 @@ class PPO_Track(object):
             # Update dones and rewards after env step
             self.current_rewards += rewards
             self.current_lengths += 1
+            if self.save_test_videos and self.num_actors == 1 and bool(dones[0]):
+                self.capture_test_frame()
+                self.finalize_test_episode_video(
+                    success=bool(truncates[0]),
+                    episode_reward=float(self.current_rewards[0, 0].item()),
+                    episode_length=int(self.current_lengths[0].item()),
+                )
             done_indices = self.dones.nonzero(as_tuple=False)
             self.episode_test_rewards.update(self.current_rewards[done_indices])
             self.episode_test_lengths.update(self.current_lengths[done_indices])
@@ -595,18 +616,112 @@ class PPO_Track(object):
         _ = self.model_act(self.obs)
         self.test_steps = (self.test_steps + self.batch_size)
 
+    def capture_test_frame(self):
+        """
+        从第 0 个环境抓一帧录像图像。
+        当前测试录像主要面向 `num_envs=1` 的可视化评估场景。
+        """
+        if self.saved_test_videos >= self.test_video_episodes:
+            return
+        try:
+            frame = self.env.call("get_record_frame")[0]
+        except Exception:
+            return
+        if frame is None or np.size(frame) == 0:
+            return
+        self.test_video_frames.append(np.asarray(frame, dtype=np.uint8).copy())
+
+    def finalize_test_episode_video(self, success, episode_reward, episode_length):
+        """
+        当前 episode 结束后，把缓存帧编码成视频。
+        只保存前若干个 episode，避免测试目录无限膨胀。
+        """
+        self.test_episode_index += 1
+        if self.saved_test_videos >= self.test_video_episodes:
+            self.test_video_frames = []
+            return
+        if len(self.test_video_frames) == 0:
+            return
+        os.makedirs(self.test_video_dir, exist_ok=True)
+        status = "success" if success else "fail"
+        video_path = os.path.join(
+            self.test_video_dir,
+            f"episode_{self.test_episode_index:02d}_{status}_r_{episode_reward:.2f}_l_{episode_length}.mp4",
+        )
+        height, width = self.test_video_frames[0].shape[:2]
+        writer = cv2.VideoWriter(
+            video_path,
+            cv2.VideoWriter_fourcc(*"mp4v"),
+            self.test_video_fps,
+            (width, height),
+        )
+        for frame in self.test_video_frames:
+            writer.write(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
+        writer.release()
+        self.saved_test_videos += 1
+        print(f"saved test video: {video_path}")
+        self.test_video_frames = []
+
+    def print_visual_debug_info(self):
+        """
+        打印最近一步的视觉估计和 MuJoCo 真值，方便判断：
+        - 检测是否丢失
+        - 位置误差大不大
+        - 速度估计是否发抖
+        """
+        try:
+            info = self.env.call("get_visual_debug_info")[0]
+        except Exception:
+            return
+        if info is None:
+            print("[visual_debug] no cached visual compare info")
+            return
+        vision_pos = np.asarray(info["vision_pos3d"])
+        gt_pos = np.asarray(info["gt_pos3d"])
+        vision_vel = np.asarray(info["vision_v_lin_3d"])
+        gt_vel = np.asarray(info["gt_v_lin_3d"])
+        print(
+            "[visual_debug] "
+            f"t={info['time']:.3f} "
+            f"valid={info['valid']} "
+            f"pos_err={info['pos_error']:.4f} "
+            f"vel_err={info['vel_error']:.4f}"
+        )
+        print(f"  vision_pos3d: {np.array2string(vision_pos, precision=4)}")
+        print(f"  gt_pos3d    : {np.array2string(gt_pos, precision=4)}")
+        print(f"  vision_vel  : {np.array2string(vision_vel, precision=4)}")
+        print(f"  gt_vel      : {np.array2string(gt_vel, precision=4)}")
+
     # 测试入口：循环调用 play_test_steps，并输出平均表现
     def test(self):
         self.set_eval()
         reset_obs, _ = self.env.reset()
         self.obs = {'obs': self.obs2tensor(reset_obs)}
         self.test_steps = self.batch_size
+        self.saved_test_videos = 0
+        self.test_video_frames = []
+        self.test_episode_index = 0
+        self.test_debug_step = 0
+        self.next_visual_debug_step = max(self.debug_visual_compare_interval, 1)
         final_rewards = 0.0
         final_lengths = 0.0
         final_success = 0.0
 
+        if self.save_test_videos and self.num_actors != 1:
+            print("test video saving currently records only env-0; recommend running with num_envs=1.")
+        if self.debug_visual_compare:
+            print(
+                f"visual compare debug enabled: "
+                f"print every ~{max(self.debug_visual_compare_interval, 1)} test steps "
+                f"(current horizon_length={self.horizon_length})"
+            )
+
         while self.test_steps < self.max_test_steps:
             self.play_test_steps()
+            self.test_debug_step += self.horizon_length
+            if self.debug_visual_compare and self.test_debug_step >= self.next_visual_debug_step:
+                self.print_visual_debug_info()
+                self.next_visual_debug_step += max(self.debug_visual_compare_interval, 1)
             self.storage.data_dict = None
             mean_rewards = self.episode_test_rewards.get_mean()
             mean_lengths = self.episode_test_lengths.get_mean()
@@ -618,6 +733,11 @@ class PPO_Track(object):
             print("mean_rewards: ", mean_rewards)
             print("mean_lengths: ", mean_lengths)
             print("mean_success: ", mean_success)
+        print(f"final_test_rewards: {final_rewards}")
+        print(f"final_test_lengths: {final_lengths}")
+        print(f"final_test_success: {final_success}")
+        if self.save_test_videos:
+            print(f"saved_test_videos: {self.saved_test_videos}")
             # wandb.log({
             #     'metrics/episode_test_rewards': mean_rewards,
             #     'metrics/episode_test_lengths': mean_lengths,

@@ -1,5 +1,4 @@
 __pycache__/
 gym_dcmm.egg-info/
 MUJOCO_LOG.TXT
-wandb
 **.log

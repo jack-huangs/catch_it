@@ -40,7 +40,7 @@ ppo:
   critic_coef: 4 # critic loss 的权重
   clip_value: True # 是否对 value 目标做截断式更新
   bounds_loss_coef: 0.0001 # 动作边界约束损失系数
-  max_agent_steps: 15000000 # 延长 tracking 训练总步数到一千万
+  max_agent_steps: 6000000 # 先做一版 600 万步的视觉 Tracking 训练
   test_num_episodes: 100 # 测试时跑多少个 episode
   max_test_steps: 10000 # 单次测试最多运行多少环境步
   img_dim: [112, 112] # 如果用图像观测，图像尺寸
