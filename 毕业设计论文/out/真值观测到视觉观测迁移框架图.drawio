@@ -1,0 +1,176 @@
+<mxfile host="app.diagrams.net" modified="2026-04-25T00:00:00.000Z" agent="Codex" version="24.7.17">
+  <diagram id="truth-to-vision" name="真值观测到视觉观测迁移框架图">
+    <mxGraphModel dx="1800" dy="2000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="2339" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <mxCell id="title" value="真值观测到视觉观测迁移框架图" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=24;fontStyle=1;fontColor=#111827;" vertex="1" parent="1">
+          <mxGeometry x="430" y="10" width="740" height="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="subtitle" value="基于当前项目实现：先用 MuJoCo 真值建立控制基线，再用 base 相机 RGB-D 视觉状态替换物体真值输入" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=15;fontColor=#4b5563;" vertex="1" parent="1">
+          <mxGeometry x="280" y="40" width="1040" height="24" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="sec_left" value="阶段一：真值观测基线" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ecfdf5;strokeColor=#16a34a;fontSize=19;fontStyle=1;fontColor=#166534;" vertex="1" parent="1">
+          <mxGeometry x="70" y="95" width="420" height="42" as="geometry"/>
+        </mxCell>
+        <mxCell id="sec_mid" value="保持不变的策略与任务接口" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;fontSize=19;fontStyle=1;fontColor=#1d4ed8;" vertex="1" parent="1">
+          <mxGeometry x="590" y="95" width="420" height="42" as="geometry"/>
+        </mxCell>
+        <mxCell id="sec_right" value="阶段二：视觉观测迁移" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#d97706;fontSize=19;fontStyle=1;fontColor=#92400e;" vertex="1" parent="1">
+          <mxGeometry x="1110" y="95" width="420" height="42" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="l1" value="MuJoCo 仿真环境&#xa;机器人、目标物体、动力学、碰撞、奖励计算" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ecfdf5;strokeColor=#16a34a;fontSize=17;fontStyle=1;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="70" y="170" width="420" height="88" as="geometry"/>
+        </mxCell>
+        <mxCell id="l2" value="直接读取物体真值状态&#xa;obj_pos3d = _get_relative_object_pos3d()&#xa;obj_v_lin_3d = _get_relative_object_v_lin_3d()" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ecfdf5;strokeColor=#16a34a;fontSize=17;fontStyle=1;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="70" y="300" width="420" height="108" as="geometry"/>
+        </mxCell>
+        <mxCell id="l3" value="构造 Tracking 观测&#xa;ee_pos3d、ee_quat、obj_pos3d、obj_v_lin_3d、&#xa;base 状态、arm 状态等一起拼成 obs" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ecfdf5;strokeColor=#16a34a;fontSize=17;fontStyle=1;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="70" y="450" width="420" height="110" as="geometry"/>
+        </mxCell>
+        <mxCell id="l4" value="PPO 以理想物体状态训练&#xa;先验证底盘 + 机械臂协同触碰任务是否可学" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ecfdf5;strokeColor=#16a34a;fontSize=17;fontStyle=1;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="70" y="600" width="420" height="88" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="m1" value="统一的 PPO 状态接口" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#3b82f6;fontSize=18;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="590" y="170" width="420" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="m2" value="object.pos3d" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;fontSize=17;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="630" y="260" width="150" height="56" as="geometry"/>
+        </mxCell>
+        <mxCell id="m3" value="object.v_lin_3d" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;fontSize=17;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="820" y="260" width="150" height="56" as="geometry"/>
+        </mxCell>
+        <mxCell id="m4" value="其余机器人状态保持不变&#xa;ee_pos3d、ee_quat、base_vel、arm_qpos 等" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;fontSize=17;fontStyle=1;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="590" y="350" width="420" height="88" as="geometry"/>
+        </mxCell>
+        <mxCell id="m5" value="同一个 Actor-Critic / PPO 训练框架&#xa;网络结构、GAE、PPO loss、优化流程不需要重写" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;fontSize=17;fontStyle=1;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="590" y="480" width="420" height="88" as="geometry"/>
+        </mxCell>
+        <mxCell id="m6" value="迁移关键点&#xa;只替换“物体状态来源”，不改变 PPO 观测字段定义" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#3b82f6;fontSize=17;fontStyle=1;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="590" y="610" width="420" height="88" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="r1" value="MuJoCo 仿真环境 + base 相机&#xa;camera_name = &quot;base&quot;，渲染 RGB 与 depth" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fffbeb;strokeColor=#d97706;fontSize=17;fontStyle=1;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="1110" y="170" width="420" height="88" as="geometry"/>
+        </mxCell>
+        <mxCell id="r2" value="视觉状态估计链路&#xa;RGB-D -&gt; 红色目标检测 -&gt; 深度统计 -&gt; 反投影 -&gt; 3D 跟踪" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fffbeb;strokeColor=#d97706;fontSize=17;fontStyle=1;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="1110" y="300" width="420" height="108" as="geometry"/>
+        </mxCell>
+        <mxCell id="r3" value="得到视觉物体状态&#xa;visual_object_state[&quot;pos3d&quot;]&#xa;visual_object_state[&quot;v_lin_3d&quot;]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fffbeb;strokeColor=#d97706;fontSize=17;fontStyle=1;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="1110" y="450" width="420" height="96" as="geometry"/>
+        </mxCell>
+        <mxCell id="r4" value="写回相同观测字段&#xa;object.pos3d = 视觉位置&#xa;object.v_lin_3d = 视觉速度（当前正式训练开启）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fffbeb;strokeColor=#d97706;fontSize=17;fontStyle=1;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="1110" y="590" width="420" height="104" as="geometry"/>
+        </mxCell>
+        <mxCell id="r5" value="失败时不回退真值&#xa;fallback_to_ground_truth = False&#xa;视觉丢失目标时直接返回零向量" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef2f2;strokeColor=#dc2626;fontSize=17;fontStyle=1;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="1110" y="735" width="420" height="96" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="c1" value="共享控制闭环" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3f4f6;strokeColor=#94a3b8;fontSize=18;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="530" y="770" width="540" height="52" as="geometry"/>
+        </mxCell>
+        <mxCell id="c2" value="PPO 策略输出 9 维动作&#xa;底盘控制 + 7 关节机械臂 + 夹爪" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8fafc;strokeColor=#94a3b8;fontSize=17;fontStyle=1;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="590" y="860" width="420" height="88" as="geometry"/>
+        </mxCell>
+        <mxCell id="c3" value="DcmmVecEnv.step() / MuJoCo 物理仿真&#xa;执行动作后更新机器人与目标物体状态" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8fafc;strokeColor=#94a3b8;fontSize=17;fontStyle=1;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="590" y="990" width="420" height="88" as="geometry"/>
+        </mxCell>
+        <mxCell id="c4" value="奖励与成功判定仍由环境计算&#xa;ee_distance、base_distance、接触关系、成功阈值等&#xa;当前不是“纯视觉 reward”，而是“视觉输入 + 仿真监督”" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fee2e2;strokeColor=#dc2626;fontSize=17;fontStyle=1;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="520" y="1120" width="560" height="110" as="geometry"/>
+        </mxCell>
+        <mxCell id="c5" value="迁移目标" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#3b82f6;fontSize=18;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="590" y="1270" width="420" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="c6" value="把“直接读取物体真值”改造成“由视觉估计物体状态”&#xa;使策略输入形式更接近真实机器人部署场景" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#3b82f6;fontSize=17;fontStyle=1;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="520" y="1360" width="560" height="92" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="note_left" value="阶段一作用&#xa;先验证任务建模、动作空间、奖励函数、PPO 训练流程本身是否成立" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fafafa;strokeColor=#cbd5e1;fontSize=16;align=left;spacingTop=8;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="70" y="760" width="420" height="84" as="geometry"/>
+        </mxCell>
+        <mxCell id="note_right" value="阶段二作用&#xa;保持控制器不变，只替换物体状态输入来源，降低从仿真到真机迁移时的感知差距" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fafafa;strokeColor=#cbd5e1;fontSize=16;align=left;spacingTop=8;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="1110" y="870" width="420" height="84" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e_l1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#4b5563;strokeWidth=2.5;" edge="1" parent="1" source="l1" target="l2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_l2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#4b5563;strokeWidth=2.5;" edge="1" parent="1" source="l2" target="l3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_l3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#4b5563;strokeWidth=2.5;" edge="1" parent="1" source="l3" target="l4">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e_r1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#4b5563;strokeWidth=2.5;" edge="1" parent="1" source="r1" target="r2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_r2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#4b5563;strokeWidth=2.5;" edge="1" parent="1" source="r2" target="r3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_r3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#4b5563;strokeWidth=2.5;" edge="1" parent="1" source="r3" target="r4">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_r4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#dc2626;strokeWidth=2.5;" edge="1" parent="1" source="r4" target="r5">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e_lm2" value="真值位置" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#16a34a;strokeWidth=2.5;fontSize=15;fontColor=#166534;" edge="1" parent="1" source="l2" target="m2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_lm3" value="真值速度" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#16a34a;strokeWidth=2.5;fontSize=15;fontColor=#166534;" edge="1" parent="1" source="l2" target="m3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_rm2" value="视觉位置" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#d97706;strokeWidth=2.5;fontSize=15;fontColor=#92400e;" edge="1" parent="1" source="r4" target="m2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_rm3" value="视觉速度" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#d97706;strokeWidth=2.5;fontSize=15;fontColor=#92400e;" edge="1" parent="1" source="r4" target="m3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e_m23m4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#4b5563;strokeWidth=2.5;" edge="1" parent="1" source="m2" target="m4">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_m33m4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#4b5563;strokeWidth=2.5;" edge="1" parent="1" source="m3" target="m4">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_m4m5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#4b5563;strokeWidth=2.5;" edge="1" parent="1" source="m4" target="m5">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_m5m6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#4b5563;strokeWidth=2.5;" edge="1" parent="1" source="m5" target="m6">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e_l4c1" value="真值版训练" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#16a34a;strokeWidth=2.5;fontSize=15;fontColor=#166534;" edge="1" parent="1" source="l4" target="c1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_r5c1" value="视觉版训练" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#d97706;strokeWidth=2.5;fontSize=15;fontColor=#92400e;" edge="1" parent="1" source="r5" target="c1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_m6c1" value="共享 PPO 接口" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#2563eb;strokeWidth=2.5;fontSize=15;fontColor=#1d4ed8;" edge="1" parent="1" source="m6" target="c1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e_c1c2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#4b5563;strokeWidth=2.5;" edge="1" parent="1" source="c1" target="c2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_c2c3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#4b5563;strokeWidth=2.5;" edge="1" parent="1" source="c2" target="c3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_c3c4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#4b5563;strokeWidth=2.5;" edge="1" parent="1" source="c3" target="c4">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_c4c5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#4b5563;strokeWidth=2.5;" edge="1" parent="1" source="c4" target="c5">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_c5c6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#4b5563;strokeWidth=2.5;" edge="1" parent="1" source="c5" target="c6">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

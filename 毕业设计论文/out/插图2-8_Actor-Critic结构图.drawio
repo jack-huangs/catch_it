@@ -1,0 +1,144 @@
+<mxfile host="app.diagrams.net" modified="2026-04-25T00:00:00.000Z" agent="Codex" version="24.7.17">
+  <diagram id="actor-critic-structure" name="插图2-8 Actor-Critic结构图">
+    <mxGraphModel dx="1700" dy="1600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="2339" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <mxCell id="title" value="Actor-Critic 结构图" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=24;fontStyle=1;fontColor=#111827;" vertex="1" parent="1">
+          <mxGeometry x="470" y="10" width="660" height="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="subtitle" value="对应当前项目 models_track.py：共享观测输入，经 Actor 与 Critic 两条网络支路分别输出动作分布参数和值函数" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=15;fontColor=#4b5563;" vertex="1" parent="1">
+          <mxGeometry x="230" y="40" width="1140" height="24" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="sec_input" value="输入层" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3f4f6;strokeColor=#94a3b8;fontSize=18;fontStyle=1;fontColor=#334155;" vertex="1" parent="1">
+          <mxGeometry x="590" y="90" width="300" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="sec_actor" value="Actor 支路" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ecfdf5;strokeColor=#16a34a;fontSize=18;fontStyle=1;fontColor=#166534;" vertex="1" parent="1">
+          <mxGeometry x="170" y="220" width="420" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="sec_critic" value="Critic 支路" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;fontSize=18;fontStyle=1;fontColor=#1d4ed8;" vertex="1" parent="1">
+          <mxGeometry x="890" y="220" width="420" height="40" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="input1" value="观测输入 obs&#xa;Tracking 任务中包含：&#xa;末端状态、物体状态、底盘状态、机械臂状态等" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8fafc;strokeColor=#94a3b8;fontSize=17;fontStyle=1;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="530" y="160" width="420" height="96" as="geometry"/>
+        </mxCell>
+        <mxCell id="input2" value="RunningMeanStd 标准化&#xa;先对观测做归一化，再送入网络" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8fafc;strokeColor=#94a3b8;fontSize=17;fontStyle=1;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="530" y="295" width="420" height="74" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="split" value="共享输入&#xa;分成两条支路" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fffbeb;strokeColor=#d97706;fontSize=17;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="620" y="405" width="240" height="110" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="actor1" value="Actor MLP&#xa;当前项目默认结构：&#xa;Linear -&gt; ELU -&gt; Linear -&gt; ELU&#xa;隐藏层规模如 [256, 128]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ecfdf5;strokeColor=#16a34a;fontSize=17;fontStyle=1;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="120" y="560" width="380" height="120" as="geometry"/>
+        </mxCell>
+        <mxCell id="actor2" value="动作均值头 mu&#xa;Linear(hidden, actions_num)&#xa;输出每个动作维度的均值" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#16a34a;fontSize=17;fontStyle=1;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="120" y="725" width="380" height="96" as="geometry"/>
+        </mxCell>
+        <mxCell id="actor3" value="动作方差参数 sigma&#xa;由可学习参数控制&#xa;与 mu 一起确定高斯动作分布" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#16a34a;fontSize=17;fontStyle=1;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="120" y="860" width="380" height="96" as="geometry"/>
+        </mxCell>
+        <mxCell id="actor4" value="构造动作分布 Normal(mu, sigma)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#bbf7d0;strokeColor=#16a34a;fontSize=17;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="120" y="995" width="380" height="64" as="geometry"/>
+        </mxCell>
+        <mxCell id="actor5" value="采样动作 actions&#xa;并计算 neglogp / entropy" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#bbf7d0;strokeColor=#16a34a;fontSize=17;fontStyle=1;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="120" y="1095" width="380" height="82" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="critic1" value="Critic MLP&#xa;当前项目可与 Actor 结构相同，&#xa;也可通过 separate_value_mlp 使用独立 Value 网络" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;fontSize=17;fontStyle=1;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="930" y="560" width="380" height="120" as="geometry"/>
+        </mxCell>
+        <mxCell id="critic2" value="值函数头 value&#xa;Linear(hidden, 1)&#xa;输出当前状态的 V(s)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#2563eb;fontSize=17;fontStyle=1;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="930" y="725" width="380" height="96" as="geometry"/>
+        </mxCell>
+        <mxCell id="critic3" value="Critic 输出 value_preds&#xa;训练时去拟合 return" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#2563eb;fontSize=17;fontStyle=1;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="930" y="860" width="380" height="82" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="merge1" value="Actor 输出" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0fdf4;strokeColor=#16a34a;fontSize=18;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="190" y="1230" width="240" height="44" as="geometry"/>
+        </mxCell>
+        <mxCell id="merge2" value="Critic 输出" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;fontSize=18;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1000" y="1230" width="240" height="44" as="geometry"/>
+        </mxCell>
+        <mxCell id="merge3" value="送入 PPO 训练" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fffbeb;strokeColor=#d97706;fontSize=18;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="575" y="1305" width="330" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="ppo1" value="Actor 参与策略更新&#xa;使用 actions、old_neglogp、new_neglogp、advantage&#xa;计算 clipped policy loss" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef2f2;strokeColor=#dc2626;fontSize=17;fontStyle=1;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="120" y="1395" width="430" height="104" as="geometry"/>
+        </mxCell>
+        <mxCell id="ppo2" value="Critic 参与价值拟合&#xa;使用 value_preds 与 return&#xa;计算 critic loss" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef2f2;strokeColor=#dc2626;fontSize=17;fontStyle=1;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="930" y="1395" width="430" height="104" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="note1" value="当前项目特点&#xa;Actor 输出的是连续动作高斯分布参数，而不是离散动作概率。&#xa;因此使用 mu 与 sigma 来表示策略。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fafafa;strokeColor=#cbd5e1;fontSize=16;align=left;spacingTop=8;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="30" y="1525" width="450" height="96" as="geometry"/>
+        </mxCell>
+        <mxCell id="note2" value="当前项目特点&#xa;Critic 预测的是状态价值 V(s)，不是动作价值 Q(s,a)。&#xa;训练时通过 return 去监督 value 逼近未来回报。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fafafa;strokeColor=#cbd5e1;fontSize=16;align=left;spacingTop=8;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="1000" y="1525" width="450" height="108" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#4b5563;strokeWidth=2.5;" edge="1" parent="1" source="input1" target="input2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#4b5563;strokeWidth=2.5;" edge="1" parent="1" source="input2" target="split">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e3" value="Actor branch" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#16a34a;strokeWidth=2.5;fontSize=15;fontColor=#166534;" edge="1" parent="1" source="split" target="actor1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e4" value="Critic branch" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#2563eb;strokeWidth=2.5;fontSize=15;fontColor=#1d4ed8;" edge="1" parent="1" source="split" target="critic1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#16a34a;strokeWidth=2.5;" edge="1" parent="1" source="actor1" target="actor2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#16a34a;strokeWidth=2.5;" edge="1" parent="1" source="actor2" target="actor4">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#16a34a;strokeWidth=2.5;" edge="1" parent="1" source="actor3" target="actor4">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#16a34a;strokeWidth=2.5;" edge="1" parent="1" source="actor1" target="actor3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#16a34a;strokeWidth=2.5;" edge="1" parent="1" source="actor4" target="actor5">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#16a34a;strokeWidth=2.5;" edge="1" parent="1" source="actor5" target="merge1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#2563eb;strokeWidth=2.5;" edge="1" parent="1" source="critic1" target="critic2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e12" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#2563eb;strokeWidth=2.5;" edge="1" parent="1" source="critic2" target="critic3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e13" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#2563eb;strokeWidth=2.5;" edge="1" parent="1" source="critic3" target="merge2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e14" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#d97706;strokeWidth=2.5;" edge="1" parent="1" source="merge1" target="merge3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e15" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#d97706;strokeWidth=2.5;" edge="1" parent="1" source="merge2" target="merge3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e16" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#dc2626;strokeWidth=2.5;" edge="1" parent="1" source="merge3" target="ppo1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e17" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#dc2626;strokeWidth=2.5;" edge="1" parent="1" source="merge3" target="ppo2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -1,0 +1,156 @@
+<mxfile host="65bd71144e">
+    <diagram id="visual-flow" name="视觉状态估计流程图">
+        <mxGraphModel dx="3602" dy="3829" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="2339" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="title" value="&lt;font style=&quot;font-size: 28px;&quot;&gt;视觉状态估计流程图&lt;/font&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=24;fontStyle=1;fontColor=#111827;" parent="1" vertex="1">
+                    <mxGeometry x="440" y="-60" width="580" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="left_section" value="图像获取与检测阶段" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ecfdf5;strokeColor=#16a34a;fontSize=18;fontStyle=1;fontColor=#166534;" parent="1" vertex="1">
+                    <mxGeometry x="95" y="10" width="520" height="38" as="geometry"/>
+                </mxCell>
+                <mxCell id="right_section" value="三维恢复与状态输出阶段" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;fontSize=18;fontStyle=1;fontColor=#1d4ed8;" parent="1" vertex="1">
+                    <mxGeometry x="825" y="100" width="520" height="38" as="geometry"/>
+                </mxCell>
+                <mxCell id="box0" value="0. 环境调用视觉状态估计&#xa;_get_obs() 中检测到 use_visual_object_state=True&#xa;进入 _get_visual_object_state()" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8fafc;strokeColor=#94a3b8;fontSize=17;fontStyle=1;spacingTop=8;" parent="1" vertex="1">
+                    <mxGeometry x="55" y="70" width="600" height="86" as="geometry"/>
+                </mxCell>
+                <mxCell id="box1" value="1. 从 base 相机渲染 RGB-D&#xa;rgb_img = render(&quot;rgb_array&quot;, camera_name=&quot;base&quot;)&#xa;depth_img = render(&quot;depth_array&quot;, camera_name=&quot;base&quot;)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ecfdf5;strokeColor=#16a34a;fontSize=17;fontStyle=1;spacingTop=8;" parent="1" vertex="1">
+                    <mxGeometry x="95" y="180" width="520" height="108" as="geometry"/>
+                </mxCell>
+                <mxCell id="box2" value="2. 深度缓冲转换为米制深度&#xa;depth_img = Dcmm.depth_2_meters(depth_img)&#xa;消除 MuJoCo depth buffer 0~1 非线性表示" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ecfdf5;strokeColor=#16a34a;fontSize=17;fontStyle=1;spacingTop=8;" parent="1" vertex="1">
+                    <mxGeometry x="95" y="325" width="520" height="102" as="geometry"/>
+                </mxCell>
+                <mxCell id="box3" value="3. 红色目标检测&#xa;RedObjectDetector.detect(rgb_image)&#xa;HSV 阈值分割 + 开闭运算 + 最大轮廓筛选" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ecfdf5;strokeColor=#16a34a;fontSize=17;fontStyle=1;spacingTop=8;" parent="1" vertex="1">
+                    <mxGeometry x="95" y="465" width="520" height="102" as="geometry"/>
+                </mxCell>
+                <mxCell id="decision1" value="检测结果是否有效？" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fffbeb;strokeColor=#d97706;fontSize=18;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="190" y="605" width="330" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="fallback1" value="返回 fallback 状态&#xa;若 last_valid 存在则复用上一次结果&#xa;否则返回全零 world_pos3d / world_v_lin_3d" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef2f2;strokeColor=#dc2626;fontSize=16;fontStyle=1;spacingTop=8;" parent="1" vertex="1">
+                    <mxGeometry x="-210" y="930" width="350" height="108" as="geometry"/>
+                </mxCell>
+                <mxCell id="box4" value="4. 统计目标区域深度&#xa;masked_depth_stat(depth_image, mask)&#xa;只保留 min_depth~max_depth 内的有效像素，取中位数深度" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ecfdf5;strokeColor=#16a34a;fontSize=16;fontStyle=1;spacingTop=8;" parent="1" vertex="1">
+                    <mxGeometry x="280" y="790" width="520" height="108" as="geometry"/>
+                </mxCell>
+                <mxCell id="2" style="edgeStyle=elbowEdgeStyle;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeWidth=2;" edge="1" parent="1" source="decision2" target="box5">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="680" y="730"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="4" value="&lt;span&gt;&lt;font&gt;是&lt;/font&gt;&lt;/span&gt;" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontStyle=1;fontSize=16;" vertex="1" connectable="0" parent="2">
+                    <mxGeometry x="-0.8983" y="-2" relative="1" as="geometry">
+                        <mxPoint y="-2" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="decision2" value="深度是否有效？" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fffbeb;strokeColor=#d97706;fontSize=18;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="190" y="1190" width="330" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="box5" value="5. 提取像素中心&#xa;u, v = det[&quot;centroid&quot;]&#xa;作为目标在图像平面的二维位置" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;fontSize=17;fontStyle=1;spacingTop=8;" parent="1" vertex="1">
+                    <mxGeometry x="825" y="160" width="520" height="95" as="geometry"/>
+                </mxCell>
+                <mxCell id="box6" value="6. 深度反投影到世界坐标&#xa;pixel_to_world(dcmm, u, v, depth, camera_name=&quot;base&quot;)&#xa;得到 world_pos3d" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;fontSize=17;fontStyle=1;spacingTop=8;" parent="1" vertex="1">
+                    <mxGeometry x="825" y="315" width="520" height="102" as="geometry"/>
+                </mxCell>
+                <mxCell id="box7" value="7. 3D 跟踪与速度估计&#xa;GravityKalman3D.update(world_pos3d, timestamp)&#xa;状态 [x,y,z,vx,vy,vz]，带重力先验并融合位置差分速度" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;fontSize=17;fontStyle=1;spacingTop=8;" parent="1" vertex="1">
+                    <mxGeometry x="825" y="455" width="520" height="118" as="geometry"/>
+                </mxCell>
+                <mxCell id="box8" value="8. 生成视觉估计结果&#xa;valid=True，保存 world_pos3d、world_v_lin_3d、depth、pixel&#xa;并更新 last_valid 缓存" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;fontSize=17;fontStyle=1;spacingTop=8;" parent="1" vertex="1">
+                    <mxGeometry x="825" y="615" width="520" height="102" as="geometry"/>
+                </mxCell>
+                <mxCell id="box9" value="9. 转成 PPO 需要的相对状态&#xa;world_pos_to_relative_object_pos3d()&#xa;world_vel_to_relative_object_v_lin_3d()" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;fontSize=17;fontStyle=1;spacingTop=8;" parent="1" vertex="1">
+                    <mxGeometry x="825" y="760" width="520" height="102" as="geometry"/>
+                </mxCell>
+                <mxCell id="box10" value="10. 失败分支处理（当前正式配置）&#xa;fallback_to_ground_truth=False&#xa;若视觉失败，则 pos3d 和 v_lin_3d 直接返回零向量" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef2f2;strokeColor=#dc2626;fontSize=17;fontStyle=1;spacingTop=8;" parent="1" vertex="1">
+                    <mxGeometry x="-270" y="1345" width="520" height="102" as="geometry"/>
+                </mxCell>
+                <mxCell id="decision3" value="use_visual_object_velocity&#xa;是否为 True？" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fffbeb;strokeColor=#d97706;fontSize=18;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="930" y="960" width="330" height="150" as="geometry"/>
+                </mxCell>
+                <mxCell id="box11" value="11A. 输出视觉位置 + 视觉速度&#xa;object.pos3d = visual pos3d&#xa;object.v_lin_3d = visual v_lin_3d" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#3b82f6;fontSize=17;fontStyle=1;spacingTop=8;" parent="1" vertex="1">
+                    <mxGeometry x="1030" y="1245" width="360" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="box12" value="11B. 仅输出视觉位置&#xa;object.pos3d = visual pos3d&#xa;object.v_lin_3d = 0 向量" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3f4f6;strokeColor=#9ca3af;fontSize=17;fontStyle=1;spacingTop=8;" parent="1" vertex="1">
+                    <mxGeometry x="700" y="1245" width="320" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="box13" value="12. 写入 PPO 观测&#xa;在 _get_obs() 中把 object.pos3d / object.v_lin_3d&#xa;拼进状态向量，供 Actor-Critic 使用" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#3b82f6;fontSize=17;fontStyle=1;spacingTop=8;" parent="1" vertex="1">
+                    <mxGeometry x="800" y="1420" width="520" height="102" as="geometry"/>
+                </mxCell>
+                <mxCell id="note1" value="当前正式训练配置&#xa;camera_name = &quot;base&quot;&#xa;use_visual_object_state = True&#xa;use_visual_object_velocity = True&#xa;fallback_to_ground_truth = False" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fafafa;strokeColor=#cbd5e1;fontSize=16;align=left;spacingTop=8;spacingLeft=12;" parent="1" vertex="1">
+                    <mxGeometry x="890" y="-40" width="360" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="note2" value="核心源码&#xa;visual_state_estimator.py&#xa;detector.py&#xa;depth_projector.py&#xa;tracker3d.py&#xa;DcmmVecEnv.py" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fafafa;strokeColor=#cbd5e1;fontSize=16;align=left;spacingTop=8;spacingLeft=12;" parent="1" vertex="1">
+                    <mxGeometry x="1280" y="990" width="260" height="138" as="geometry"/>
+                </mxCell>
+                <mxCell id="e01" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#4b5563;strokeWidth=2.5;" parent="1" source="box0" target="box1" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e12" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#4b5563;strokeWidth=2.5;" parent="1" source="box1" target="box2" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e23" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#4b5563;strokeWidth=2.5;" parent="1" source="box2" target="box3" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e34" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#4b5563;strokeWidth=2.5;" parent="1" source="box3" target="decision1" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e4yes" value="是" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#4b5563;strokeWidth=2.5;fontSize=15;fontColor=#4b5563;" parent="1" source="decision1" target="box4" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e4no" value="否" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#dc2626;strokeWidth=2.5;fontSize=15;fontColor=#dc2626;exitX=0.2;exitY=1;exitDx=0;exitDy=0;" parent="1" source="decision1" target="fallback1" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="160" y="770"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e45" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#4b5563;strokeWidth=2.5;" parent="1" source="box4" target="decision2" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e5no" value="&lt;b&gt;&lt;font style=&quot;font-size: 17px;&quot;&gt;否&lt;/font&gt;&lt;/b&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#dc2626;strokeWidth=2.5;fontSize=15;fontColor=#dc2626;exitX=0;exitY=0.5;exitDx=0;exitDy=0;" parent="1" source="decision2" target="fallback1" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="160" y="1140"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e56" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#4b5563;strokeWidth=2.5;" parent="1" source="box5" target="box6" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e67" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#4b5563;strokeWidth=2.5;" parent="1" source="box6" target="box7" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e78" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#4b5563;strokeWidth=2.5;" parent="1" source="box7" target="box8" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e89" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#4b5563;strokeWidth=2.5;" parent="1" source="box8" target="box9" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e9d" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#4b5563;strokeWidth=2.5;" parent="1" source="box9" target="decision3" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e10to13" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#dc2626;strokeWidth=2.5;" parent="1" source="box10" target="box13" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ed_yes" value="True" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#2563eb;strokeWidth=2.5;fontSize=15;fontColor=#2563eb;exitX=0.75;exitY=1;exitDx=0;exitDy=0;" parent="1" source="decision3" target="box11" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ed_no" value="False" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#6b7280;strokeWidth=2.5;fontSize=15;fontColor=#6b7280;exitX=0.25;exitY=1;exitDx=0;exitDy=0;" parent="1" source="decision3" target="box12" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e11a13" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#4b5563;strokeWidth=2.5;" parent="1" source="box11" target="box13" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e11b13" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#4b5563;strokeWidth=2.5;" parent="1" source="box12" target="box13" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="3" style="edgeStyle=none;html=1;entryX=0.455;entryY=0.034;entryDx=0;entryDy=0;entryPerimeter=0;strokeWidth=2;" edge="1" parent="1" source="fallback1" target="box10">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

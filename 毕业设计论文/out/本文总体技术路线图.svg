@@ -1,0 +1,123 @@
+<svg width="1600" height="960" viewBox="0 0 1600 960" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .title { font: 700 30px 'Microsoft YaHei', 'PingFang SC', Arial, sans-serif; fill: #1f2937; }
+      .subtitle { font: 600 18px 'Microsoft YaHei', 'PingFang SC', Arial, sans-serif; fill: #374151; }
+      .section { font: 700 22px 'Microsoft YaHei', 'PingFang SC', Arial, sans-serif; fill: #0f172a; }
+      .boxTitle { font: 700 18px 'Microsoft YaHei', 'PingFang SC', Arial, sans-serif; fill: #0f172a; }
+      .boxText { font: 500 15px 'Microsoft YaHei', 'PingFang SC', Arial, sans-serif; fill: #334155; }
+      .smallText { font: 500 14px 'Microsoft YaHei', 'PingFang SC', Arial, sans-serif; fill: #475569; }
+      .lane { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1.5; rx: 20; }
+      .boxBlue { fill: #dbeafe; stroke: #60a5fa; stroke-width: 2; rx: 16; }
+      .boxGreen { fill: #dcfce7; stroke: #4ade80; stroke-width: 2; rx: 16; }
+      .boxPurple { fill: #ede9fe; stroke: #a78bfa; stroke-width: 2; rx: 16; }
+      .boxOrange { fill: #ffedd5; stroke: #fb923c; stroke-width: 2; rx: 16; }
+      .boxGray { fill: #eef2f7; stroke: #94a3b8; stroke-width: 2; rx: 16; }
+      .shadow { filter: drop-shadow(0px 4px 8px rgba(15, 23, 42, 0.10)); }
+      .arrow { stroke: #64748b; stroke-width: 3; fill: none; marker-end: url(#arrowhead); }
+      .arrowDashed { stroke: #94a3b8; stroke-width: 2.5; fill: none; stroke-dasharray: 8 6; marker-end: url(#arrowhead); }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <polygon points="0 0, 10 5, 0 10" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1600" height="960" fill="#ffffff"/>
+
+  <text x="800" y="52" text-anchor="middle" class="title">本文总体技术路线图</text>
+  <text x="800" y="86" text-anchor="middle" class="subtitle">基于强化学习与 RGB-D 视觉感知的移动机械臂协同动态目标触碰方法研究</text>
+
+  <!-- Top goal -->
+  <g class="shadow">
+    <rect x="430" y="110" width="740" height="88" class="boxGray"/>
+    <text x="800" y="145" text-anchor="middle" class="boxTitle">研究目标</text>
+    <text x="800" y="174" text-anchor="middle" class="boxText">实现移动底盘与机械臂协同控制，使夹爪末端能够对抛来的动态目标完成稳定触碰</text>
+  </g>
+
+  <!-- Lanes -->
+  <rect x="55" y="240" width="470" height="470" class="lane"/>
+  <rect x="565" y="240" width="470" height="470" class="lane"/>
+  <rect x="1075" y="240" width="470" height="470" class="lane"/>
+
+  <text x="290" y="278" text-anchor="middle" class="section">阶段一：真值状态基线</text>
+  <text x="800" y="278" text-anchor="middle" class="section">阶段二：RGB-D 视觉状态估计</text>
+  <text x="1310" y="278" text-anchor="middle" class="section">阶段三：视觉观测融合控制</text>
+
+  <!-- Left column -->
+  <g class="shadow">
+    <rect x="105" y="315" width="370" height="82" class="boxBlue"/>
+    <text x="290" y="348" text-anchor="middle" class="boxTitle">任务建模与系统构建</text>
+    <text x="290" y="376" text-anchor="middle" class="boxText">状态空间、动作空间、奖励函数、成功判定</text>
+  </g>
+  <g class="shadow">
+    <rect x="105" y="440" width="370" height="82" class="boxBlue"/>
+    <text x="290" y="473" text-anchor="middle" class="boxTitle">PPO 协同控制基线设计</text>
+    <text x="290" y="501" text-anchor="middle" class="boxText">底盘二维动作 + 机械臂七关节动作</text>
+  </g>
+  <g class="shadow">
+    <rect x="105" y="565" width="370" height="82" class="boxBlue"/>
+    <text x="290" y="598" text-anchor="middle" class="boxTitle">基于真值状态的训练与测试</text>
+    <text x="290" y="626" text-anchor="middle" class="boxText">验证协同控制框架在理想观测条件下的可行性</text>
+  </g>
+
+  <!-- Middle column -->
+  <g class="shadow">
+    <rect x="615" y="315" width="370" height="82" class="boxGreen"/>
+    <text x="800" y="348" text-anchor="middle" class="boxTitle">相机安装与参数设计</text>
+    <text x="800" y="376" text-anchor="middle" class="boxText">相机位置、视场角、遮挡影响分析</text>
+  </g>
+  <g class="shadow">
+    <rect x="615" y="440" width="370" height="82" class="boxGreen"/>
+    <text x="800" y="473" text-anchor="middle" class="boxTitle">目标检测与深度反投影</text>
+    <text x="800" y="501" text-anchor="middle" class="boxText">RGB 目标检测 + 深度读取 + 三维位置恢复</text>
+  </g>
+  <g class="shadow">
+    <rect x="615" y="565" width="370" height="82" class="boxGreen"/>
+    <text x="800" y="598" text-anchor="middle" class="boxTitle">三维速度估计与误差评估</text>
+    <text x="800" y="626" text-anchor="middle" class="boxText">位置误差、速度误差、有效检测率分析</text>
+  </g>
+
+  <!-- Right column -->
+  <g class="shadow">
+    <rect x="1125" y="315" width="370" height="82" class="boxPurple"/>
+    <text x="1310" y="348" text-anchor="middle" class="boxTitle">视觉状态替换真值状态</text>
+    <text x="1310" y="376" text-anchor="middle" class="boxText">目标位置与速度来源由真值切换为 RGB-D 估计</text>
+  </g>
+  <g class="shadow">
+    <rect x="1125" y="440" width="370" height="82" class="boxPurple"/>
+    <text x="1310" y="473" text-anchor="middle" class="boxTitle">融合视觉观测的 PPO 训练</text>
+    <text x="1310" y="501" text-anchor="middle" class="boxText">保持控制框架基本不变，分析感知误差影响</text>
+  </g>
+  <g class="shadow">
+    <rect x="1125" y="565" width="370" height="82" class="boxPurple"/>
+    <text x="1310" y="598" text-anchor="middle" class="boxTitle">真值版与视觉版对比实验</text>
+    <text x="1310" y="626" text-anchor="middle" class="boxText">比较成功率、平均奖励、轨迹长度与误差表现</text>
+  </g>
+
+  <!-- Internal arrows -->
+  <path d="M290 397 L290 440" class="arrow"/>
+  <path d="M290 522 L290 565" class="arrow"/>
+
+  <path d="M800 397 L800 440" class="arrow"/>
+  <path d="M800 522 L800 565" class="arrow"/>
+
+  <path d="M1310 397 L1310 440" class="arrow"/>
+  <path d="M1310 522 L1310 565" class="arrow"/>
+
+  <!-- Cross arrows -->
+  <path d="M475 606 C530 606, 560 606, 615 606" class="arrowDashed"/>
+  <path d="M985 606 C1040 606, 1070 606, 1125 606" class="arrowDashed"/>
+
+  <!-- Bottom summary -->
+  <g class="shadow">
+    <rect x="260" y="760" width="1080" height="118" class="boxOrange"/>
+    <text x="800" y="799" text-anchor="middle" class="boxTitle">最终形成的方法</text>
+    <text x="800" y="832" text-anchor="middle" class="boxText">基于强化学习与 RGB-D 视觉感知的移动机械臂协同动态目标触碰方法</text>
+    <text x="800" y="860" text-anchor="middle" class="smallText">先在真值状态条件下验证协同控制框架，再通过视觉状态估计实现从理想观测到感知驱动控制的迁移</text>
+  </g>
+
+  <!-- Arrows from lanes to summary -->
+  <path d="M290 647 C290 710, 430 735, 620 760" class="arrow"/>
+  <path d="M800 647 C800 705, 800 720, 800 760" class="arrow"/>
+  <path d="M1310 647 C1310 710, 1170 735, 980 760" class="arrow"/>
+</svg>

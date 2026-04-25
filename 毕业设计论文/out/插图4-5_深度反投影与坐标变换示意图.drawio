@@ -1,0 +1,115 @@
+<mxfile host="65bd71144e">
+    <diagram id="depth-backprojection-transform" name="插图4-5 深度反投影与坐标变换示意图">
+        <mxGraphModel dx="1133" dy="993" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="2339" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="title" value="深度反投影与坐标变换示意图" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=24;fontStyle=1;fontColor=#111827;" parent="1" vertex="1">
+                    <mxGeometry x="430" y="10" width="740" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="subtitle" value="从 RGB 像素点与深度值恢复三维位置，并转换为机器人可用的相对坐标状态" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=15;fontColor=#4b5563;" parent="1" vertex="1">
+                    <mxGeometry x="290" y="40" width="1020" height="24" as="geometry"/>
+                </mxCell>
+                <mxCell id="sec_img" value="图像域" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ecfdf5;strokeColor=#16a34a;fontSize=18;fontStyle=1;fontColor=#166534;" parent="1" vertex="1">
+                    <mxGeometry x="70" y="90" width="280" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="sec_cam" value="相机几何域" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;fontSize=18;fontStyle=1;fontColor=#1d4ed8;" parent="1" vertex="1">
+                    <mxGeometry x="405" y="90" width="320" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="sec_world" value="世界 / 机器人坐标域" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fffbeb;strokeColor=#d97706;fontSize=18;fontStyle=1;fontColor=#92400e;" parent="1" vertex="1">
+                    <mxGeometry x="780" y="90" width="430" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="b1" value="1. RGB 图像中的目标像素&#xa;检测器输出目标 mask 与质心 (u, v)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ecfdf5;strokeColor=#16a34a;fontSize=17;fontStyle=1;spacingTop=8;" parent="1" vertex="1">
+                    <mxGeometry x="70" y="170" width="280" height="92" as="geometry"/>
+                </mxCell>
+                <mxCell id="b2" value="2. 深度图中的目标深度&#xa;在目标 mask 区域内统计有效深度&#xa;取中位数 depth" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ecfdf5;strokeColor=#16a34a;fontSize=17;fontStyle=1;spacingTop=8;" parent="1" vertex="1">
+                    <mxGeometry x="70" y="300" width="280" height="104" as="geometry"/>
+                </mxCell>
+                <mxCell id="b3" value="输入量&#xa;像素坐标：p = (u, v)&#xa;深度值：d" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#16a34a;fontSize=17;fontStyle=1;spacingTop=8;" parent="1" vertex="1">
+                    <mxGeometry x="95" y="450" width="230" height="86" as="geometry"/>
+                </mxCell>
+                <mxCell id="b4" value="3. 像素反投影到相机射线&#xa;根据相机内参把像素点恢复为视线方向" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;fontSize=17;fontStyle=1;spacingTop=8;" parent="1" vertex="1">
+                    <mxGeometry x="425" y="170" width="280" height="92" as="geometry"/>
+                </mxCell>
+                <mxCell id="b5" value="4. 结合深度恢复相机坐标系三维点&#xa;P_c = [X_c, Y_c, Z_c]^T&#xa;表示目标在相机坐标系下的位置" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;fontSize=17;fontStyle=1;spacingTop=8;" parent="1" vertex="1">
+                    <mxGeometry x="425" y="300" width="280" height="108" as="geometry"/>
+                </mxCell>
+                <mxCell id="b6" value="项目实现对应&#xa;pixel_to_world(dcmm, u, v, depth, camera_name)&#xa;内部调用 MujocoDcmm.pixel_2_world()" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#3b82f6;fontSize=17;fontStyle=1;spacingTop=8;" parent="1" vertex="1">
+                    <mxGeometry x="425" y="450" width="280" height="106" as="geometry"/>
+                </mxCell>
+                <mxCell id="b7" value="5. 相机坐标系 -&gt; 世界坐标系&#xa;根据相机外参与当前相机位姿&#xa;得到世界坐标下三维点 P_w" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fffbeb;strokeColor=#d97706;fontSize=17;fontStyle=1;spacingTop=8;" parent="1" vertex="1">
+                    <mxGeometry x="820" y="170" width="340" height="106" as="geometry"/>
+                </mxCell>
+                <mxCell id="b8" value="6. 世界坐标系 -&gt; 机器人相对坐标系&#xa;world_pos_to_relative_object_pos3d(P_w)&#xa;得到 PPO 使用的 object.pos3d" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fffbeb;strokeColor=#d97706;fontSize=17;fontStyle=1;spacingTop=8;" parent="1" vertex="1">
+                    <mxGeometry x="820" y="320" width="340" height="104" as="geometry"/>
+                </mxCell>
+                <mxCell id="b9" value="7. 速度也在同一坐标链路下转换&#xa;跟踪器输出 world_v_lin_3d&#xa;再转换为 relative v_lin_3d" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fffbeb;strokeColor=#d97706;fontSize=17;fontStyle=1;spacingTop=8;" parent="1" vertex="1">
+                    <mxGeometry x="820" y="470" width="340" height="102" as="geometry"/>
+                </mxCell>
+                <mxCell id="b10" value="8. 最终送入 PPO 观测&#xa;object.pos3d, object.v_lin_3d&#xa;与 ee/base/arm 状态一起组成 obs" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#d97706;fontSize=17;fontStyle=1;spacingTop=8;" parent="1" vertex="1">
+                    <mxGeometry x="820" y="760" width="340" height="104" as="geometry"/>
+                </mxCell>
+                <mxCell id="geom1" value="像素坐标系" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f0fdf4;strokeColor=#16a34a;fontSize=16;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="125" y="620" width="160" height="56" as="geometry"/>
+                </mxCell>
+                <mxCell id="geom2" value="相机坐标系" style="ellipse;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;fontSize=16;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="485" y="620" width="160" height="56" as="geometry"/>
+                </mxCell>
+                <mxCell id="geom3" value="世界坐标系" style="ellipse;whiteSpace=wrap;html=1;fillColor=#fffbeb;strokeColor=#d97706;fontSize=16;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="770" y="620" width="140" height="56" as="geometry"/>
+                </mxCell>
+                <mxCell id="geom4" value="机器人相对坐标系" style="ellipse;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#d97706;fontSize=16;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="580" y="720" width="200" height="56" as="geometry"/>
+                </mxCell>
+                <mxCell id="eq1" value="典型反投影关系（示意）&#xa;X_c = (u - c_x) d / f_x&#xa;Y_c = (v - c_y) d / f_y&#xa;Z_c = d" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fafafa;strokeColor=#cbd5e1;fontSize=16;align=left;spacingTop=8;spacingLeft=12;" parent="1" vertex="1">
+                    <mxGeometry x="1215" y="190" width="250" height="108" as="geometry"/>
+                </mxCell>
+                <mxCell id="eq2" value="坐标变换关系（示意）&#xa;P_w = T_wc P_c&#xa;P_r = T_rw P_w" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fafafa;strokeColor=#cbd5e1;fontSize=16;align=left;spacingTop=8;spacingLeft=12;" parent="1" vertex="1">
+                    <mxGeometry x="1215" y="335" width="250" height="92" as="geometry"/>
+                </mxCell>
+                <mxCell id="note" value="说明&#xa;在你的项目代码里，相机反投影与坐标变换没有手写成论文里的显式矩阵公式，&#xa;而是通过 pixel_2_world() 与后续 relative 坐标转换函数完成。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8fafc;strokeColor=#94a3b8;fontSize=16;align=left;spacingTop=8;spacingLeft=12;" parent="1" vertex="1">
+                    <mxGeometry x="1215" y="470" width="250" height="124" as="geometry"/>
+                </mxCell>
+                <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#4b5563;strokeWidth=2.5;" parent="1" source="b1" target="b2" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#4b5563;strokeWidth=2.5;" parent="1" source="b2" target="b3" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e3" style="edgeStyle=elbowEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#2563eb;strokeWidth=2.5;" parent="1" source="b3" target="b4" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#2563eb;strokeWidth=2.5;" parent="1" source="b4" target="b5" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#2563eb;strokeWidth=2.5;" parent="1" source="b5" target="b6" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e6" style="edgeStyle=elbowEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#d97706;strokeWidth=2.5;" parent="1" source="b6" target="b7" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#d97706;strokeWidth=2.5;" parent="1" source="b7" target="b8" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#d97706;strokeWidth=2.5;" parent="1" source="b8" target="b9" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#d97706;strokeWidth=2.5;" parent="1" source="b9" target="b10" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e10" value="p = (u, v), d" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#16a34a;strokeWidth=2.2;fontSize=15;fontColor=#166534;" parent="1" source="b3" target="geom1" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e11" value="反投影" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#2563eb;strokeWidth=2.2;fontSize=15;fontColor=#1d4ed8;" parent="1" source="geom1" target="geom2" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e12" value="外参变换" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#d97706;strokeWidth=2.2;fontSize=15;fontColor=#92400e;" parent="1" source="geom2" target="geom3" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e13" value="相对坐标转换" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#d97706;strokeWidth=2.2;fontSize=15;fontColor=#92400e;" parent="1" source="geom3" target="geom4" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>
