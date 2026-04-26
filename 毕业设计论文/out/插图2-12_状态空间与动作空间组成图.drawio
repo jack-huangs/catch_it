@@ -1,0 +1,180 @@
+<mxfile host="app.diagrams.net" modified="2026-04-25T00:00:00.000Z" agent="Codex" version="24.7.17">
+  <diagram id="state-action-space" name="插图2-12 状态空间与动作空间组成图">
+    <mxGraphModel dx="1700" dy="1600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="2339" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <mxCell id="title" value="状态空间与动作空间组成图" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=24;fontStyle=1;fontColor=#111827;" vertex="1" parent="1">
+          <mxGeometry x="460" y="10" width="680" height="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="subtitle" value="对应当前 Tracking 任务：状态包含末端、目标、底盘和机械臂信息；动作包含底盘控制与机械臂关节控制" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=15;fontColor=#4b5563;" vertex="1" parent="1">
+          <mxGeometry x="210" y="40" width="1180" height="24" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="sec_state" value="状态空间（Observation / State Space）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;fontSize=19;fontStyle=1;fontColor=#1d4ed8;" vertex="1" parent="1">
+          <mxGeometry x="70" y="90" width="640" height="42" as="geometry"/>
+        </mxCell>
+        <mxCell id="sec_action" value="动作空间（Action Space）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ecfdf5;strokeColor=#16a34a;fontSize=19;fontStyle=1;fontColor=#166534;" vertex="1" parent="1">
+          <mxGeometry x="840" y="90" width="620" height="42" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="state0" value="Tracking 观测向量&#xa;当前项目 obs_dim = 25" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#3b82f6;fontSize=18;fontStyle=1;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="190" y="160" width="400" height="74" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="state1" value="末端状态（End-Effector State）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;fontSize=18;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="90" y="280" width="260" height="48" as="geometry"/>
+        </mxCell>
+        <mxCell id="state1b" value="ee_pos3d：末端相对底盘的三维位置（3 维）&#xa;ee_quat：末端姿态四元数（4 维）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8fbff;strokeColor=#93c5fd;fontSize=16;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="90" y="345" width="260" height="104" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="state2" value="目标状态（Object State）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;fontSize=18;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="390" y="280" width="300" height="48" as="geometry"/>
+        </mxCell>
+        <mxCell id="state2b" value="obj_pos3d：目标相对底盘的三维位置（3 维）&#xa;obj_v_lin_3d：目标相对底盘的三维线速度（3 维）&#xa;当前视觉版中，这两项来自 base 相机视觉估计" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8fbff;strokeColor=#93c5fd;fontSize=16;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="390" y="345" width="300" height="122" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="state3" value="底盘状态（Mobile Base State）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;fontSize=18;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="90" y="500" width="260" height="48" as="geometry"/>
+        </mxCell>
+        <mxCell id="state3b" value="base_q：底盘位姿中的相关量（如偏航）&#xa;base_v_lin_2d：底盘平面线速度（2 维）&#xa;base_w：底盘角速度相关量" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8fbff;strokeColor=#93c5fd;fontSize=16;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="90" y="565" width="260" height="118" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="state4" value="机械臂状态（Arm State）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;fontSize=18;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="390" y="500" width="300" height="48" as="geometry"/>
+        </mxCell>
+        <mxCell id="state4b" value="arm_qpos：机械臂关节位置（7 维）&#xa;arm_qvel：机械臂关节速度（若当前观测配置包含）&#xa;用于反映机械臂当前运动状态" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8fbff;strokeColor=#93c5fd;fontSize=16;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="390" y="565" width="300" height="118" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="state5" value="状态作用" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#3b82f6;fontSize=18;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="190" y="730" width="400" height="46" as="geometry"/>
+        </mxCell>
+        <mxCell id="state5b" value="这些状态共同描述：&#xa;机器人当前在哪、末端朝向如何、目标在哪里、目标正朝哪个方向运动。&#xa;PPO 正是根据这组状态来决定下一步底盘和机械臂应如何动作。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8fafc;strokeColor=#94a3b8;fontSize=16;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="120" y="790" width="540" height="104" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="action0" value="Tracking 动作向量&#xa;当前项目 act_dim = 9" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#16a34a;fontSize=18;fontStyle=1;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="965" y="160" width="370" height="74" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="action1" value="底盘动作（Base Actions）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ecfdf5;strokeColor=#16a34a;fontSize=18;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="860" y="280" width="260" height="48" as="geometry"/>
+        </mxCell>
+        <mxCell id="action1b" value="通常为 2 维：&#xa;前后 / 平面线速度控制&#xa;转向 / 角速度控制" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0fdf4;strokeColor=#86efac;fontSize=16;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="860" y="345" width="260" height="96" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="action2" value="机械臂动作（Arm Actions）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ecfdf5;strokeColor=#16a34a;fontSize=18;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1160" y="280" width="260" height="48" as="geometry"/>
+        </mxCell>
+        <mxCell id="action2b" value="7 个关节控制量（7 维）&#xa;分别对应 7 自由度机械臂各关节的目标控制输入" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0fdf4;strokeColor=#86efac;fontSize=16;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="1160" y="345" width="260" height="96" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="action3" value="动作执行对象" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#16a34a;fontSize=18;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="965" y="500" width="350" height="46" as="geometry"/>
+        </mxCell>
+        <mxCell id="action3b" value="底盘动作通过底盘控制器作用到车体运动；&#xa;机械臂动作通过关节控制器作用到各关节；&#xa;两者共同决定末端执行器下一时刻的位置与姿态。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8fafc;strokeColor=#94a3b8;fontSize=16;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="900" y="565" width="480" height="104" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="action4" value="动作作用" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#16a34a;fontSize=18;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="965" y="730" width="350" height="46" as="geometry"/>
+        </mxCell>
+        <mxCell id="action4b" value="底盘负责把机器人整体移动到合适的空间位置；&#xa;机械臂负责更精细地调整末端轨迹；&#xa;两者协同，才能提升触碰飞行目标的成功率。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8fafc;strokeColor=#94a3b8;fontSize=16;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="900" y="790" width="480" height="104" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="center1" value="PPO 策略网络" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fffbeb;strokeColor=#d97706;fontSize=18;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="680" y="965" width="170" height="52" as="geometry"/>
+        </mxCell>
+        <mxCell id="center2" value="状态作为输入&#xa;动作作为输出" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff7ed;strokeColor=#fdba74;fontSize=16;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="640" y="1045" width="250" height="72" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#3b82f6;strokeWidth=2.5;" edge="1" parent="1" source="state0" target="state1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#3b82f6;strokeWidth=2.5;" edge="1" parent="1" source="state0" target="state2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#3b82f6;strokeWidth=2.5;" edge="1" parent="1" source="state1" target="state1b">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#3b82f6;strokeWidth=2.5;" edge="1" parent="1" source="state2" target="state2b">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#3b82f6;strokeWidth=2.5;" edge="1" parent="1" source="state0" target="state3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#3b82f6;strokeWidth=2.5;" edge="1" parent="1" source="state0" target="state4">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#3b82f6;strokeWidth=2.5;" edge="1" parent="1" source="state3" target="state3b">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#3b82f6;strokeWidth=2.5;" edge="1" parent="1" source="state4" target="state4b">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#3b82f6;strokeWidth=2.5;" edge="1" parent="1" source="state1b" target="state5">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#3b82f6;strokeWidth=2.5;" edge="1" parent="1" source="state2b" target="state5">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#3b82f6;strokeWidth=2.5;" edge="1" parent="1" source="state3b" target="state5">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e12" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#3b82f6;strokeWidth=2.5;" edge="1" parent="1" source="state4b" target="state5">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e13" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#3b82f6;strokeWidth=2.5;" edge="1" parent="1" source="state5" target="state5b">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e14" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#16a34a;strokeWidth=2.5;" edge="1" parent="1" source="action0" target="action1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e15" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#16a34a;strokeWidth=2.5;" edge="1" parent="1" source="action0" target="action2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e16" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#16a34a;strokeWidth=2.5;" edge="1" parent="1" source="action1" target="action1b">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e17" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#16a34a;strokeWidth=2.5;" edge="1" parent="1" source="action2" target="action2b">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e18" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#16a34a;strokeWidth=2.5;" edge="1" parent="1" source="action1b" target="action3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e19" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#16a34a;strokeWidth=2.5;" edge="1" parent="1" source="action2b" target="action3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e20" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#16a34a;strokeWidth=2.5;" edge="1" parent="1" source="action3" target="action3b">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e21" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#16a34a;strokeWidth=2.5;" edge="1" parent="1" source="action3b" target="action4">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e22" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#16a34a;strokeWidth=2.5;" edge="1" parent="1" source="action4" target="action4b">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e23" value="输入" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#d97706;strokeWidth=2.5;fontSize=15;fontColor=#92400e;" edge="1" parent="1" source="state5b" target="center1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e24" value="输出" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#d97706;strokeWidth=2.5;fontSize=15;fontColor=#92400e;" edge="1" parent="1" source="center1" target="action3b">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e25" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#d97706;strokeWidth=2.5;" edge="1" parent="1" source="center1" target="center2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

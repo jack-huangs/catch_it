@@ -1,0 +1,57 @@
+<mujoco model="tidybot scene">
+  <include file="tidybot_cube.xml"/>
+
+  <statistic center="0.25 0 0.6" extent="1.0" meansize="0.05"/>
+
+  <visual>
+    <quality offsamples="0"/>
+    <headlight diffuse="0.6 0.6 0.6" ambient="0.1 0.1 0.1" specular="0 0 0"/>
+    <rgba haze="0.15 0.25 0.35 1"/>
+    <global azimuth="120" elevation="-20"/>
+  </visual>
+
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512" height="3072"/>
+    <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3"
+      markrgb="0.8 0.8 0.8" width="300" height="300"/>
+    <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5" reflectance="0.2"/>
+    <material name="door_frame" rgba="1 1 1 1"/>
+    <material name="door_panel" rgba="0.75 0.45 0.35 1"/>
+    <material name="door_handle" rgba="0.9 0.9 0.9 1"/>
+  </asset>
+
+  <sensor>
+    <jointpos name="door_hinge" joint="door_hinge"/>
+  </sensor>
+
+  <worldbody>
+    <light pos="0 0 1.5" directional="true"/>
+    <geom name="floor" size="0 0 0.05" type="plane" material="groundplane"/>
+    <camera name="viewer" pos="0.8 -2.0 1.7" euler="1.0 0.0 0" fovy="42" resolution="640 480"/>
+
+    <body name="door_frame" pos="1.0 0 0">
+      <geom name="frame" type="box" pos="0 0 0.9" size="0.05 0.6 0.9" material="door_frame"/>
+      <!-- <geom name="stain_0" type="box" pos="-0.051 0.20 0.70" size="0.02 0.001 0.02" rgba="0 0 0 1" contype="0" conaffinity="0"/>
+      <geom name="stain_1" type="box" pos="-0.051 -0.10 1.05" size="0.025 0.001 0.015" rgba="0 0 0 1" contype="0" conaffinity="0"/>
+      <geom name="stain_2" type="box" pos="-0.051 0.05 0.95" size="0.015 0.001 0.03" rgba="0 0 0 1" contype="0" conaffinity="0"/>
+      <geom name="stain_3" type="box" pos="-0.051 -0.25 0.80" size="0.03 0.001 0.02" rgba="0 0 0 1" contype="0" conaffinity="0"/> -->
+      <geom name="stain_4" type="box" pos="-0.051 0.2 1.05" size="0.02 0.001 0.025" rgba="0 0 0 1" contype="0" conaffinity="0"/>
+
+      <body name="door" pos="0 0 0">
+        <joint name="door_hinge" type="hinge" axis="0 0 1" limited="true" range="0 1.57" damping="0.2" frictionloss="0.05"/>
+        <geom name="door_panel" type="box" pos="0.35 0 0.9" size="0.35 0.02 0.9" material="door_panel" density="600"/>
+        <geom name="door_block" type="box" pos="-0.1 0.5 1.0" size="0.04 0.08 0.02" material="door_frame" density="800"/>
+      </body>
+    </body>
+
+    <body name="door_cube" pos="0.9 0.5 1.1">
+        <geom name="door_cube_geom" type="box" size="0.03 0.03 0.05" rgba="0 0 0 1" density="2000"/>
+        <joint name="door_cube_freejoint" type="free"/>
+    </body>
+
+    <!-- <body name="target_object" pos="0.65 0.5 1.05">
+      <geom name="target_sphere" type="sphere" size="0.01" rgba="0.8 0.2 0.2 1"/>
+    </body> -->
+
+  </worldbody>
+</mujoco>

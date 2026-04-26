@@ -1,0 +1,15 @@
+wbc: 0
+cameras:
+  - viewer
+  - base1
+  - base2
+  - wrist
+  - topview
+  - sideview
+pcl_cameras:
+  - base1
+  - base2
+task: dishwasher
+data_folder: dev1
+min_bound: [-2.5, -2.5, 0.02]
+max_bound: [2.5, 2.5, 2]

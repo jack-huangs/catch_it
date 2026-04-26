@@ -1,0 +1,17 @@
+wbc: 1
+data_folder: dev1
+cameras:
+  - name: wrist
+    type: kinova
+  - name: base1
+    type: realsense
+    serial: "247122072471"
+  - name: base2
+    type: realsense
+    serial: "247122073666"
+pcl_cameras:
+  - base1
+  - base2
+calib_dir: calib_files
+min_bound: [0.2, -0.5, -0.35]
+max_bound: [1.0, 0.5, 0.3]

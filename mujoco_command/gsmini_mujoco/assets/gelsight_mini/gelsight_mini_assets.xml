@@ -1,0 +1,4 @@
+<mujocoinclude>
+    <mesh name="gelsight_mini" file="../assets/gelsight_mini/assets/gsmini_shell.stl"
+        scale="0.001 0.001 0.001" />
+</mujocoinclude>

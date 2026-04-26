@@ -1,0 +1,14 @@
+wbc: 1
+cameras:
+  - viewer
+  - base1
+  - base2
+  - wrist
+pcl_cameras:
+  - base1
+  - base2
+task: open
+data_folder: dev1
+arm_reset_qpos: [0.0, 0.26179939, 3.14159265, -2.26892803, 0, 0.95993109, 1.57079633] 
+min_bound: [-inf, -inf, 0.02]
+max_bound: [inf, inf, inf]

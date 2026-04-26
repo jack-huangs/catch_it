@@ -1,0 +1,18 @@
+<mujoco model="gelsight_mini">
+
+	<asset>
+		<include file="../assets/gelsight_mini/gelsight_mini_assets.xml" />
+	</asset>
+
+	<worldbody>
+		<body name="gelsight_mini" pos="0.71 0.535 0.1" quat="1 1 0 0">
+		<!-- <body name="gelsight_mini" pos="0.71 0.535 0.1" quat="1 1 0 0"> -->
+		<!-- <body name="gelsight_mini" pos="0.7036 0.5383 0.1" quat="1 1 0 0"> -->
+			<!-- <joint type="free" /> -->
+			<geom name="gelsight_mini" type="mesh" mesh="gelsight_mini" condim="6" mass="0.3"
+				solimp="0.09 0.95 0.001 0.5 2" solref="1 1"/>
+			<camera name="gelsight_mini" mode="fixed" fovy="38" quat="1 1 0 0" pos="0.001 -0.01 0" />
+			<!-- <camera name="gelsight_mini" mode="fixed" fovy="35" quat="1 1 0 0" /> -->
+		</body>
+	</worldbody>
+</mujoco>

@@ -1,0 +1,13 @@
+wbc: 1
+cameras: 
+  # - viewer
+  - base1
+  # - base2
+  - wrist
+  # - gelsight_mini_left
+  # - gelsight_mini_right
+# pcl_cameras: []
+task: door
+data_folder: dev1
+min_bound: [-inf, -inf, 0.02]
+max_bound: [inf, inf, inf]
