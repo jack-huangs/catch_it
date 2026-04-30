@@ -4,34 +4,34 @@
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
-                <mxCell id="title" value="基于项目实现的 PPO 训练流程图" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=24;fontStyle=1;fontColor=#111827;" parent="1" vertex="1">
+                <mxCell id="title" value="基于项目实现的 PPO 训练流程图" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=28;fontStyle=1;fontColor=#111827;" parent="1" vertex="1">
                     <mxGeometry x="470" y="10" width="660" height="30" as="geometry"/>
                 </mxCell>
-                <mxCell id="section_left" value="数据采样阶段" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ecfdf5;strokeColor=#16a34a;fontSize=18;fontStyle=1;fontColor=#16a34a;" parent="1" vertex="1">
+                <mxCell id="section_left" value="数据采样阶段" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ecfdf5;strokeColor=#16a34a;fontSize=22;fontStyle=1;fontColor=#16a34a;" parent="1" vertex="1">
                     <mxGeometry x="175" y="560" width="240" height="36" as="geometry"/>
                 </mxCell>
-                <mxCell id="section_right" value="参数更新阶段" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#3b82f6;fontSize=18;fontStyle=1;fontColor=#2563eb;" parent="1" vertex="1">
+                <mxCell id="section_right" value="参数更新阶段" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#3b82f6;fontSize=22;fontStyle=1;fontColor=#2563eb;" parent="1" vertex="1">
                     <mxGeometry x="1050" y="560" width="240" height="36" as="geometry"/>
                 </mxCell>
-                <mxCell id="box0" value="开始训练&#xa;读取 Hydra 配置，构建环境、PPO 模型、优化器和统计器" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#3b82f6;fontSize=18;fontStyle=1;align=center;verticalAlign=middle;spacingTop=10;" parent="1" vertex="1">
+                <mxCell id="box0" value="开始训练&#xa;读取 Hydra 配置，构建环境、PPO 模型、优化器和统计器" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#3b82f6;fontSize=21;fontStyle=1;align=center;verticalAlign=middle;spacingTop=10;" parent="1" vertex="1">
                     <mxGeometry x="520" y="50" width="560" height="80" as="geometry"/>
                 </mxCell>
-                <mxCell id="box1" value="初始化阶段&#xa;创建 AsyncVectorEnv、RunningMeanStd、ExperienceBuffer&#xa;加载 checkpoint（若有），切换 train 模式" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3f4f6;strokeColor=#9ca3af;fontSize=17;fontStyle=1;align=center;verticalAlign=middle;spacingTop=10;" parent="1" vertex="1">
+                <mxCell id="box1" value="初始化阶段&#xa;创建 AsyncVectorEnv、RunningMeanStd、ExperienceBuffer&#xa;加载 checkpoint（若有），切换 train 模式" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3f4f6;strokeColor=#9ca3af;fontSize=20;fontStyle=1;align=center;verticalAlign=middle;spacingTop=10;" parent="1" vertex="1">
                     <mxGeometry x="520" y="165" width="560" height="110" as="geometry"/>
                 </mxCell>
-                <mxCell id="box2" value="环境复位&#xa;env.reset() 得到多环境初始 obs，episode 统计量清零" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#3b82f6;fontSize=18;fontStyle=1;align=center;verticalAlign=middle;spacingTop=10;" parent="1" vertex="1">
+                <mxCell id="box2" value="环境复位&#xa;env.reset() 得到多环境初始 obs，episode 统计量清零" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#3b82f6;fontSize=21;fontStyle=1;align=center;verticalAlign=middle;spacingTop=10;" parent="1" vertex="1">
                     <mxGeometry x="520" y="310" width="560" height="88" as="geometry"/>
                 </mxCell>
-                <mxCell id="box3" value="进入主循环&#xa;持续训练，直到 agent_steps &gt;= max_agent_steps" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#d97706;fontSize=18;fontStyle=1;align=center;verticalAlign=middle;spacingTop=10;" parent="1" vertex="1">
+                <mxCell id="box3" value="进入主循环&#xa;持续训练，直到 agent_steps &gt;= max_agent_steps" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#d97706;fontSize=21;fontStyle=1;align=center;verticalAlign=middle;spacingTop=10;" parent="1" vertex="1">
                     <mxGeometry x="520" y="440" width="560" height="86" as="geometry"/>
                 </mxCell>
-                <mxCell id="box4" value="1. 采样 rollout&#xa;按 horizon_length 与环境交互&#xa;obs 标准化 -&gt; ActorCritic.act() -&gt; 采样动作/均值/方差/value" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#16a34a;fontSize=17;fontStyle=1;align=center;verticalAlign=middle;spacingTop=10;" parent="1" vertex="1">
+                <mxCell id="box4" value="1. 采样 rollout&#xa;按 horizon_length 与环境交互&#xa;obs 标准化 -&gt; ActorCritic.act() -&gt; 采样动作/均值/方差/value" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#16a34a;fontSize=20;fontStyle=1;align=center;verticalAlign=middle;spacingTop=10;" parent="1" vertex="1">
                     <mxGeometry x="145" y="610" width="560" height="120" as="geometry"/>
                 </mxCell>
-                <mxCell id="box5" value="2. 执行动作&#xa;env.step(actions) 得到 next_obs、reward、done、info&#xa;并累计 episode_rewards / episode_lengths / episode_success" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#16a34a;fontSize=17;fontStyle=1;align=center;verticalAlign=middle;spacingTop=10;" parent="1" vertex="1">
+                <mxCell id="box5" value="2. 执行动作&#xa;env.step(actions) 得到 next_obs、reward、done、info&#xa;并累计 episode_rewards / episode_lengths / episode_success" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#16a34a;fontSize=20;fontStyle=1;align=center;verticalAlign=middle;spacingTop=10;" parent="1" vertex="1">
                     <mxGeometry x="145" y="770" width="560" height="116" as="geometry"/>
                 </mxCell>
-                <mxCell id="box6" value="3. 存储轨迹&#xa;把 obs、actions、values、neglogp、mu、sigma、rewards、dones&#xa;写入 ExperienceBuffer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#16a34a;fontSize=17;fontStyle=1;align=center;verticalAlign=middle;spacingTop=10;" parent="1" vertex="1">
+                <mxCell id="box6" value="3. 存储轨迹&#xa;把 obs、actions、values、neglogp、mu、sigma、rewards、dones&#xa;写入 ExperienceBuffer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#16a34a;fontSize=20;fontStyle=1;align=center;verticalAlign=middle;spacingTop=10;" parent="1" vertex="1">
                     <mxGeometry x="145" y="930" width="560" height="116" as="geometry"/>
                 </mxCell>
                 <mxCell id="2" value="" style="edgeStyle=orthogonalEdgeStyle;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;rounded=0;strokeWidth=3;" edge="1" parent="1" source="box7" target="box8">
@@ -39,22 +39,22 @@
                         <mxPoint x="785" y="1148" as="targetPoint"/>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="box7" value="4. rollout 结束后 bootstrap&#xa;用最后一个 next_obs 估计 last_values&#xa;再调用 compute_return() 计算 GAE advantage 与 return" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#d97706;fontSize=17;fontStyle=1;align=center;verticalAlign=middle;spacingTop=10;" parent="1" vertex="1">
+                <mxCell id="box7" value="4. rollout 结束后 bootstrap&#xa;用最后一个 next_obs 估计 last_values&#xa;再调用 compute_return() 计算 GAE advantage 与 return" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#d97706;fontSize=20;fontStyle=1;align=center;verticalAlign=middle;spacingTop=10;" parent="1" vertex="1">
                     <mxGeometry x="145" y="1090" width="560" height="116" as="geometry"/>
                 </mxCell>
-                <mxCell id="box8" value="5. 切换到训练阶段&#xa;set_train()，停止与环境交互，开始使用 rollout 数据更新网络" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#3b82f6;fontSize=17;fontStyle=1;align=center;verticalAlign=middle;spacingTop=10;" parent="1" vertex="1">
+                <mxCell id="box8" value="5. 切换到训练阶段&#xa;set_train()，停止与环境交互，开始使用 rollout 数据更新网络" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#3b82f6;fontSize=20;fontStyle=1;align=center;verticalAlign=middle;spacingTop=10;" parent="1" vertex="1">
                     <mxGeometry x="900" y="610" width="560" height="120" as="geometry"/>
                 </mxCell>
-                <mxCell id="box9" value="6. 多轮 mini-epoch 更新&#xa;按 mini_epochs × minibatch 训练&#xa;重新前向计算 action_log_probs、values、entropy、mu、sigma" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#3b82f6;fontSize=17;fontStyle=1;align=center;verticalAlign=middle;spacingTop=10;" parent="1" vertex="1">
+                <mxCell id="box9" value="6. 多轮 mini-epoch 更新&#xa;按 mini_epochs × minibatch 训练&#xa;重新前向计算 action_log_probs、values、entropy、mu、sigma" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#3b82f6;fontSize=20;fontStyle=1;align=center;verticalAlign=middle;spacingTop=10;" parent="1" vertex="1">
                     <mxGeometry x="900" y="770" width="560" height="130" as="geometry"/>
                 </mxCell>
-                <mxCell id="box10" value="7. 计算 PPO 损失&#xa;ratio = exp(old_neglogp - new_neglogp)&#xa;Actor clipped loss + Critic loss + Entropy bonus&#xa;+ Bounds loss（若启用）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fee2e2;strokeColor=#dc2626;fontSize=17;fontStyle=1;align=center;verticalAlign=middle;spacingTop=10;" parent="1" vertex="1">
+                <mxCell id="box10" value="7. 计算 PPO 损失&#xa;ratio = exp(old_neglogp - new_neglogp)&#xa;Actor clipped loss + Critic loss + Entropy bonus&#xa;+ Bounds loss（若启用）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fee2e2;strokeColor=#dc2626;fontSize=20;fontStyle=1;align=center;verticalAlign=middle;spacingTop=10;" parent="1" vertex="1">
                     <mxGeometry x="900" y="945" width="560" height="150" as="geometry"/>
                 </mxCell>
-                <mxCell id="box11" value="8. 反向传播与优化&#xa;optimizer.zero_grad() -&gt; loss.backward()&#xa;梯度裁剪 -&gt; optimizer.step()&#xa;再按 KL / cosine 调整学习率" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fee2e2;strokeColor=#dc2626;fontSize=17;fontStyle=1;align=center;verticalAlign=middle;spacingTop=10;" parent="1" vertex="1">
+                <mxCell id="box11" value="8. 反向传播与优化&#xa;optimizer.zero_grad() -&gt; loss.backward()&#xa;梯度裁剪 -&gt; optimizer.step()&#xa;再按 KL / cosine 调整学习率" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fee2e2;strokeColor=#dc2626;fontSize=20;fontStyle=1;align=center;verticalAlign=middle;spacingTop=10;" parent="1" vertex="1">
                     <mxGeometry x="900" y="1140" width="560" height="134" as="geometry"/>
                 </mxCell>
-                <mxCell id="box12" value="9. 记录与保存&#xa;记录 reward / success / loss / KL / entropy&#xa;若当前结果更好则保存 best_reward checkpoint" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3f4f6;strokeColor=#9ca3af;fontSize=17;fontStyle=1;align=center;verticalAlign=middle;spacingTop=10;" parent="1" vertex="1">
+                <mxCell id="box12" value="9. 记录与保存&#xa;记录 reward / success / loss / KL / entropy&#xa;若当前结果更好则保存 best_reward checkpoint" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3f4f6;strokeColor=#9ca3af;fontSize=20;fontStyle=1;align=center;verticalAlign=middle;spacingTop=10;" parent="1" vertex="1">
                     <mxGeometry x="520" y="1330" width="560" height="104" as="geometry"/>
                 </mxCell>
                 <mxCell id="5" style="edgeStyle=orthogonalEdgeStyle;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0.482;entryY=1;entryDx=0;entryDy=0;entryPerimeter=0;rounded=0;strokeWidth=3;" edge="1" parent="1" source="decision" target="note1">
@@ -62,19 +62,19 @@
                         <mxPoint x="70" y="1560" as="targetPoint"/>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="decision" value="是否达到&#xa;最大步数？" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#d97706;fontSize=18;fontStyle=1;align=center;verticalAlign=middle;" parent="1" vertex="1">
+                <mxCell id="decision" value="是否达到&#xa;最大步数？" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#d97706;fontSize=21;fontStyle=1;align=center;verticalAlign=middle;" parent="1" vertex="1">
                     <mxGeometry x="620" y="1485" width="360" height="140" as="geometry"/>
                 </mxCell>
-                <mxCell id="box13" value="训练结束&#xa;输出最终统计，保存 last checkpoint&#xa;可进入测试 / 可视化阶段" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#3b82f6;fontSize=18;fontStyle=1;align=center;verticalAlign=middle;spacingTop=10;" parent="1" vertex="1">
+                <mxCell id="box13" value="训练结束&#xa;输出最终统计，保存 last checkpoint&#xa;可进入测试 / 可视化阶段" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#3b82f6;fontSize=21;fontStyle=1;align=center;verticalAlign=middle;spacingTop=10;" parent="1" vertex="1">
                     <mxGeometry x="520" y="1665" width="560" height="86" as="geometry"/>
                 </mxCell>
                 <mxCell id="8" style="edgeStyle=orthogonalEdgeStyle;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeWidth=3;rounded=0;curved=0;" edge="1" parent="1" source="note1" target="box4">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="note1" value="&lt;font style=&quot;font-size: 17px;&quot;&gt;关键数据&lt;br&gt;obs: 环境观测&lt;br&gt;actions: 9 维动作&lt;br&gt;values: Critic 预测 V(s)&lt;br&gt;returns: GAE 目标值&lt;br&gt;advantage: PPO 策略更新信号&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fafafa;strokeColor=#cbd5e1;fontSize=16;align=left;verticalAlign=middle;spacingTop=8;spacingLeft=12;" parent="1" vertex="1">
+                <mxCell id="note1" value="&lt;font style=&quot;font-size: 20px;&quot;&gt;关键数据&lt;br&gt;obs: 环境观测&lt;br&gt;actions: 9 维动作&lt;br&gt;values: Critic 预测 V(s)&lt;br&gt;returns: GAE 目标值&lt;br&gt;advantage: PPO 策略更新信号&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fafafa;strokeColor=#cbd5e1;fontSize=19;align=left;verticalAlign=middle;spacingTop=8;spacingLeft=12;" parent="1" vertex="1">
                     <mxGeometry x="-120" y="1292" width="330" height="180" as="geometry"/>
                 </mxCell>
-                <mxCell id="note2" value="&lt;font style=&quot;font-size: 17px;&quot;&gt;对应代码文件&lt;br&gt;ppo_dcmm_track.py&lt;br&gt;experience.py&lt;br&gt;models_track.py&lt;br&gt;DcmmVecEnv.py&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fafafa;strokeColor=#cbd5e1;fontSize=16;align=left;verticalAlign=middle;spacingTop=8;spacingLeft=12;" parent="1" vertex="1">
+                <mxCell id="note2" value="&lt;font style=&quot;font-size: 20px;&quot;&gt;对应代码文件&lt;br&gt;ppo_dcmm_track.py&lt;br&gt;experience.py&lt;br&gt;models_track.py&lt;br&gt;DcmmVecEnv.py&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fafafa;strokeColor=#cbd5e1;fontSize=19;align=left;verticalAlign=middle;spacingTop=8;spacingLeft=12;" parent="1" vertex="1">
                     <mxGeometry x="1140" y="1370" width="350" height="190" as="geometry"/>
                 </mxCell>
                 <mxCell id="e0" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#4b5563;strokeWidth=2.5;" parent="1" source="box0" target="box1" edge="1">
@@ -110,10 +110,10 @@
                 <mxCell id="e11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#4b5563;strokeWidth=2.5;" parent="1" source="box11" target="box12" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e12" value="是" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#4b5563;strokeWidth=2.5;fontSize=16;fontColor=#4b5563;" parent="1" source="box12" target="decision" edge="1">
+                <mxCell id="e12" value="是" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#4b5563;strokeWidth=2.5;fontSize=19;fontColor=#4b5563;" parent="1" source="box12" target="decision" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e13" value="达到最大步数" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#4b5563;strokeWidth=2.5;fontSize=16;fontColor=#4b5563;" parent="1" source="decision" target="box13" edge="1">
+                <mxCell id="e13" value="达到最大步数" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeColor=#4b5563;strokeWidth=2.5;fontSize=19;fontColor=#4b5563;" parent="1" source="decision" target="box13" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
             </root>

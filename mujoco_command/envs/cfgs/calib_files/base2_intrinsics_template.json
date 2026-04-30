@@ -1,0 +1,21 @@
+{
+  "camera_name": "base2",
+  "source_device": "Intel RealSense D455",
+  "serial": "247122073666",
+  "resolution": [640, 360],
+  "depth_units": "meters_after_depth_scale",
+  "depth_scale_from_device": null,
+  "distortion": [null, null, null, null, null],
+  "intrinsic_matrix": [
+    [null, 0.0, null],
+    [0.0, null, null],
+    [0.0, 0.0, 1.0]
+  ],
+  "fields": {
+    "fx": "intrinsic_matrix[0][0]",
+    "fy": "intrinsic_matrix[1][1]",
+    "cx": "intrinsic_matrix[0][2]",
+    "cy": "intrinsic_matrix[1][2]"
+  },
+  "note": "Fill this with values read from the real D455, not from MuJoCo."
+}

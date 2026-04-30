@@ -1,12 +1,12 @@
 <svg width="1600" height="960" viewBox="0 0 1600 960" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <style>
-      .title { font: 700 30px 'Microsoft YaHei', 'PingFang SC', Arial, sans-serif; fill: #1f2937; }
-      .subtitle { font: 600 18px 'Microsoft YaHei', 'PingFang SC', Arial, sans-serif; fill: #374151; }
-      .section { font: 700 22px 'Microsoft YaHei', 'PingFang SC', Arial, sans-serif; fill: #0f172a; }
-      .boxTitle { font: 700 18px 'Microsoft YaHei', 'PingFang SC', Arial, sans-serif; fill: #0f172a; }
-      .boxText { font: 500 15px 'Microsoft YaHei', 'PingFang SC', Arial, sans-serif; fill: #334155; }
-      .smallText { font: 500 14px 'Microsoft YaHei', 'PingFang SC', Arial, sans-serif; fill: #475569; }
+      .title { font: 700 34px 'Microsoft YaHei', 'PingFang SC', Arial, sans-serif; fill: #1f2937; }
+      .subtitle { font: 600 21px 'Microsoft YaHei', 'PingFang SC', Arial, sans-serif; fill: #374151; }
+      .section { font: 700 25px 'Microsoft YaHei', 'PingFang SC', Arial, sans-serif; fill: #0f172a; }
+      .boxTitle { font: 700 21px 'Microsoft YaHei', 'PingFang SC', Arial, sans-serif; fill: #0f172a; }
+      .boxText { font: 500 18px 'Microsoft YaHei', 'PingFang SC', Arial, sans-serif; fill: #334155; }
+      .smallText { font: 500 17px 'Microsoft YaHei', 'PingFang SC', Arial, sans-serif; fill: #475569; }
       .lane { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1.5; rx: 20; }
       .boxBlue { fill: #dbeafe; stroke: #60a5fa; stroke-width: 2; rx: 16; }
       .boxGreen { fill: #dcfce7; stroke: #4ade80; stroke-width: 2; rx: 16; }

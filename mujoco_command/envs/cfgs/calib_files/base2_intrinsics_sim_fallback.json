@@ -1,0 +1,16 @@
+{
+  "camera_name": "base2",
+  "source": "Approximate Intel RealSense D455 RGB fallback from official FOV 90x65 deg and resolution=640x360",
+  "resolution": [640, 360],
+  "intrinsic_matrix": [
+    [320.0, 0.0, 320.0],
+    [0.0, 282.5434038811, 180.0],
+    [0.0, 0.0, 1.0]
+  ],
+  "approximation": {
+    "fov_x_deg": 90.0,
+    "fov_y_deg": 65.0,
+    "assumed_principal_point": [320.0, 180.0]
+  },
+  "note": "Use only for temporary bring-up if the real D455 intrinsics have not been dumped yet."
+}

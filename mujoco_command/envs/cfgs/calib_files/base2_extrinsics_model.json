@@ -1,0 +1,21 @@
+{
+  "camera_name": "base2",
+  "source_model_camera": "base",
+  "source_model_file": "/home/jack/桌面/catch_it/assets/urdf/stanford_tidybot2/tidybot.xml",
+  "transform_convention": "camera_to_robot",
+  "camera_frame": "x right, y down, z forward",
+  "robot_frame": "base_link",
+  "position_m": [-0.089, -0.214, 1.6],
+  "look_at_m": [1.2, 0.0, 1.0],
+  "rotation_camera_to_robot": [
+    [0.1637784253, -0.4116646235, 0.8964981122],
+    [-0.9864971502, -0.0683446311, 0.1488367696],
+    [0.0, -0.9087690846, -0.417299354]
+  ],
+  "transform_camera_to_robot": [
+    [0.1637784253, -0.4116646235, 0.8964981122, -0.089],
+    [-0.9864971502, -0.0683446311, 0.1488367696, -0.214],
+    [0.0, -0.9087690846, -0.417299354, 1.6],
+    [0.0, 0.0, 0.0, 1.0]
+  ]
+}
