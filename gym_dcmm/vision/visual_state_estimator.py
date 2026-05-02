@@ -15,9 +15,9 @@ class VisualStateEstimator:
 
     def __init__(self, camera_name="base", min_depth=0.1, max_depth=8.0):
         self.camera_name = camera_name
-        self.detector = RedObjectDetector()
-        self.projector = DepthProjector(min_depth=min_depth, max_depth=max_depth)
-        self.tracker = GravityKalman3D()
+        self.detector = RedObjectDetector()#在 RGB 图里找红球
+        self.projector = DepthProjector(min_depth=min_depth, max_depth=max_depth)#从像素和深度恢复三维位置
+        self.tracker = GravityKalman3D()#根据连续时刻的位置估计速度
         self.last_valid = None
 
     def reset(self):
@@ -29,17 +29,17 @@ class VisualStateEstimator:
         self.last_valid = None
 
     def update(self, dcmm, rgb_image, depth_image, timestamp):
-        det = self.detector.detect(rgb_image)
+        det = self.detector.detect(rgb_image)#1111111在 RGB 图里找红球，得到 bbox球的框、centroid球中心像素坐标、mask球在图里的像素区域 等信息
         if not det["valid"]:
             return self._fallback(False)
-
+        #22222222222用前面检测到的球的 mask，在深度图里只取这块区域
         depth_value = self.projector.masked_depth_stat(depth_image, det["mask"])
         if depth_value is None:
             return self._fallback(False)
-
+        #33333取球中心像素坐标，u：图像横坐标，v：图像纵坐标
         u, v = det["centroid"]
-        world_pos = self.projector.pixel_to_world(dcmm, u, v, depth_value, self.camera_name)
-        world_pos, world_vel = self.tracker.update(world_pos, timestamp)
+        world_pos = self.projector.pixel_to_world(dcmm, u, v, depth_value, self.camera_name)#根据像素坐标和深度值，恢复球在世界坐标系下的三维位置
+        world_pos, world_vel = self.tracker.update(world_pos, timestamp)#GravityKalman3D.update根据连续时刻估计速度
 
         result = {
             "valid": True,

@@ -206,11 +206,12 @@ class DcmmVecEnv(gym.Env):
         self.visual_fallback_to_ground_truth = bool(DcmmCfg.vision_config.get("fallback_to_ground_truth", False))
         self.visual_estimator = None
         if self.use_visual_object_state:
-            self.visual_estimator = VisualStateEstimator(
+            self.visual_estimator = VisualStateEstimator( #！！！！
                 camera_name=self.visual_camera_name,
                 min_depth=DcmmCfg.vision_config.get("min_depth", 0.1),
                 max_depth=DcmmCfg.vision_config.get("max_depth", 8.0),
             )
+
         if self.Dcmm.open_viewer:
             if self.Dcmm.viewer:
                 print("Close the previous viewer")
@@ -513,11 +514,6 @@ class DcmmVecEnv(gym.Env):
         return np.array([object_v_lin_x, object_v_lin_y, world_v_lin_3d[2]-base_vel[2]], dtype=np.float32)
 
     def _render_visual_object_camera(self):
-        """
-        单独从视觉相机渲染 RGB-D。
-        这里不走 env.render()，因为 env.render() 主要服务显示；
-        视觉估计需要固定使用 base 相机，并且同时拿到 RGB 和 depth。
-        """
         rgb_img = self.mujoco_renderer.render("rgb_array", camera_name=self.visual_camera_name)
         depth_img = self.mujoco_renderer.render("depth_array", camera_name=self.visual_camera_name)
         depth_img = self.Dcmm.depth_2_meters(depth_img)

@@ -120,9 +120,6 @@ class PPO_Track(object):
         self.episode_rewards = AverageScalarMeter(200)
         self.episode_lengths = AverageScalarMeter(200)
         self.episode_success = AverageScalarMeter(200)
-        self.episode_test_rewards = AverageScalarMeter(self.ppo_config['test_num_episodes'])
-        self.episode_test_lengths = AverageScalarMeter(self.ppo_config['test_num_episodes'])
-        self.episode_test_success = AverageScalarMeter(self.ppo_config['test_num_episodes'])
 
         self.obs = None
         self.epoch_num = 0
@@ -140,7 +137,7 @@ class PPO_Track(object):
         self.dones = torch.ones((batch_size,), dtype=torch.uint8, device=self.device) # 1 表示 episode 已经结束，0 表示还在进行中。初始化成全 1，表示一开始就要 reset 环境。
         self.agent_steps = 0 
         self.max_agent_steps = self.ppo_config['max_agent_steps']
-        self.max_test_steps = self.ppo_config['max_test_steps']
+        self.max_test_steps = int(self.ppo_config.get('max_test_steps', 10000))
         self.best_rewards = -10000
         self.save_test_videos = bool(full_config.get('save_test_videos', False))
         self.test_video_episodes = int(full_config.get('test_video_episodes', 8))
@@ -152,6 +149,10 @@ class PPO_Track(object):
         self.test_episode_index = 0
         self.test_debug_step = 0
         self.next_visual_debug_step = 0
+        self.test_total_episodes = 0
+        self.test_total_reward_sum = 0.0
+        self.test_total_length_sum = 0.0
+        self.test_total_success_sum = 0.0
         # ---- Timing
         self.data_collect_time = 0
         self.rl_train_time = 0
@@ -596,10 +597,17 @@ class PPO_Track(object):
                     episode_reward=float(self.current_rewards[0, 0].item()),
                     episode_length=int(self.current_lengths[0].item()),
                 )
-            done_indices = self.dones.nonzero(as_tuple=False)
-            self.episode_test_rewards.update(self.current_rewards[done_indices])
-            self.episode_test_lengths.update(self.current_lengths[done_indices])
-            self.episode_test_success.update(torch.tensor(truncates, dtype=torch.float32, device=self.device)[done_indices])
+            done_indices = self.dones.nonzero(as_tuple=False).squeeze(-1)
+            if done_indices.numel() > 0:
+                done_rewards = self.current_rewards[done_indices]
+                done_lengths = self.current_lengths[done_indices]
+                done_success = torch.tensor(truncates, dtype=torch.float32, device=self.device)[done_indices]
+                # 测试阶段额外累计“从开始到当前”为止的总体统计值，
+                # 最终成功率按全部已完成 episode 计算，不再只看最近窗口。
+                self.test_total_episodes += int(done_indices.numel())
+                self.test_total_reward_sum += float(done_rewards.sum().item())
+                self.test_total_length_sum += float(done_lengths.sum().item())
+                self.test_total_success_sum += float(done_success.sum().item())
             assert isinstance(infos, dict), 'Info Should be a Dict'
             for k, v in infos.items():
                 # only log scalars
@@ -703,6 +711,10 @@ class PPO_Track(object):
         self.test_episode_index = 0
         self.test_debug_step = 0
         self.next_visual_debug_step = max(self.debug_visual_compare_interval, 1)
+        self.test_total_episodes = 0
+        self.test_total_reward_sum = 0.0
+        self.test_total_length_sum = 0.0
+        self.test_total_success_sum = 0.0
         final_rewards = 0.0
         final_lengths = 0.0
         final_success = 0.0
@@ -723,19 +735,25 @@ class PPO_Track(object):
                 self.print_visual_debug_info()
                 self.next_visual_debug_step += max(self.debug_visual_compare_interval, 1)
             self.storage.data_dict = None
-            mean_rewards = self.episode_test_rewards.get_mean()
-            mean_lengths = self.episode_test_lengths.get_mean()
-            mean_success = self.episode_test_success.get_mean()
+            if self.test_total_episodes > 0:
+                mean_rewards = self.test_total_reward_sum / self.test_total_episodes
+                mean_lengths = self.test_total_length_sum / self.test_total_episodes
+                mean_success = self.test_total_success_sum / self.test_total_episodes
+            else:
+                mean_rewards = 0.0
+                mean_lengths = 0.0
+                mean_success = 0.0
             final_rewards = mean_rewards
             final_lengths = mean_lengths
             final_success = mean_success
-            print("## Sample Length %d ##" % len(self.episode_test_rewards))
-            print("mean_rewards: ", mean_rewards)
-            print("mean_lengths: ", mean_lengths)
-            print("mean_success: ", mean_success)
+            print("## Tested Episodes %d ##" % self.test_total_episodes)
+            print("overall_mean_rewards: ", mean_rewards)
+            print("overall_mean_lengths: ", mean_lengths)
+            print("overall_mean_success: ", mean_success)
         print(f"final_test_rewards: {final_rewards}")
         print(f"final_test_lengths: {final_lengths}")
         print(f"final_test_success: {final_success}")
+        print(f"final_test_episodes: {self.test_total_episodes}")
         if self.save_test_videos:
             print(f"saved_test_videos: {self.saved_test_videos}")
             # wandb.log({

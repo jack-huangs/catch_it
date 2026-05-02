@@ -511,7 +511,7 @@ class MJ_DCMM(object):
                                 1]) * (depth)
         
         pos_c = np.linalg.inv(self.cam_matrix) @ pixel_coord
-        # MuJoCo 相机坐标系和世界坐标系轴定义不同，这里要做轴变换
+        # 坐标轴变换
         pos_c[1] *= -1
         pos_c[1], pos_c[2] = pos_c[2], pos_c[1]
         # 最后再变换到世界坐标系

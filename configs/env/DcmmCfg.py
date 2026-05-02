@@ -103,10 +103,11 @@ cam_config = {
 ## base 相机 RGB-D -> 红球检测 -> 深度反投影 -> 3D 跟踪
 ## ------------------------------
 vision_config = {
-    "use_visual_object_state": True,
-    # 当前正式训练切到“纯视觉物体状态”：
-    # PPO 同时接收视觉位置和视觉速度。
-    "use_visual_object_velocity": True,
+    "use_visual_object_state": False,
+    # 当前先切回“真值物体状态”训练：
+    # PPO 直接接收 MuJoCo 提供的物体真值位置；
+    # 只有把上面改成 True 时，才会走视觉链路。
+    "use_visual_object_velocity": False,
     "camera_name": "base",
     "min_depth": 0.1,
     "max_depth": 8.0,
