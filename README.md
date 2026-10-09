@@ -1,6 +1,6 @@
 <div align="center">
 
-# Catch It! — 基于强化学习的移动机械臂动态目标跟踪
+# Catch It! — 基于强化学习的移动机械臂动态目标跟踪 名称虽然叫catch it但还未实现夹爪的闭合动作（还没有设计这点的奖励函数，准确的来说实验应该叫touching（或者叫traching））！
 
 **Reinforcement Learning for Dynamic Target Tracking with a Mobile Manipulator**
 
@@ -18,7 +18,7 @@
 
 这是一个以**本科毕业设计 / 研究实验**为背景的强化学习仿真工程。工作重点是对已有 DCMM / *Catch It!* 代码框架进行机器人模型迁移、奖励函数重新设计、全部视觉算法构建。
 
-> **当前项目状态：** 仓库当前主要支持 **Tracking（目标跟踪 / 末端接近）**。原代码保留了 `Catching_TwoStage`、`Catching_OneStage` 的 PPO 实现，但当前 `DcmmVecEnv` 环境构造函数仅允许 `Tracking`，因此不能直接把这两种 Catching 模式视为现成可运行的功能。
+> **当前项目状态：** 仓库当前主要支持 **Tracking（目标跟踪 / 末端接近）**。原代码保留了 `Catching_TwoStage`、`Catching_OneStage` 的 PPO 实现，但当前 `DcmmVecEnv` 环境构造函数仅允许 `Touching`，因此不能直接把这两种 Catching 模式视为现成可运行的功能。
 
 ### 仿真预览
 
@@ -286,9 +286,6 @@ catch_it/
 
 感谢相关开源项目与研究工作的贡献。本项目对原有移动灵巧操作任务进行了以 **TidyBot + Tracking** 为核心的工程适配与实验探索。
 
-## 📄 License
-
-本仓库包含 [`MIT License`](LICENSE) 许可文件，现有版权声明为 **Copyright (c) 2025 Yuanhang Zhang**。使用、复制与分发时请遵守仓库实际许可条款并保留适当的原始署名。
 
 ---
 
